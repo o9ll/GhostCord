@@ -39,8 +39,10 @@ export async function checkedFetch(url: Url, options?: RequestInit) {
 
     let message = `${options?.method ?? "GET"} ${url}: ${res.status} ${res.statusText}`;
     try {
-        const reason = await res.text();
-        message += `\n${reason}`;
+        let reason = await res.text();
+        // Strip HTML tags and collapse whitespace to avoid dumping full error pages into errors
+        reason = reason.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+        if (reason) message += `: ${reason.substring(0, 200)}${reason.length > 200 ? "..." : ""}`;
     } catch { }
 
     throw new Error(message);

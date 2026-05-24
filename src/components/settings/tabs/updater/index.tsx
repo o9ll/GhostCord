@@ -53,7 +53,12 @@ function UpdaterTab() {
             }
         } catch (e: any) {
             UpdateLogger.error(e);
-            const detail = e?.message || e?.error?.message || (typeof e === "string" ? e : null);
+            let detail: string | null = e?.message || e?.error?.message || (typeof e === "string" ? e : null);
+            // Strip any residual HTML and truncate to keep the UI clean
+            if (detail) {
+                detail = detail.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+                if (detail.length > 300) detail = detail.substring(0, 300) + "…";
+            }
             setError(`Impossible de vérifier les mises à jour.${detail ? ` (${detail})` : " Vérifie ta connexion."}`);
         } finally {
             setChecking(false);

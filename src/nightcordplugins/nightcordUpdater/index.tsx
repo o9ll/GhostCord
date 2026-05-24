@@ -96,40 +96,43 @@ function UpdateBanner() {
         setStatus("Téléchargement en cours...");
 
         try {
-            // On délègue entièrement à l'updater main-process (http.ts)
-            // BUILD = applyUpdates() qui télécharge le zip et extrait dans dist/
             const VencordNative = (window as any).VencordNative;
-            const ipc = VencordNative?.updater ?? VencordNative?.native;
+            const ipc = VencordNative?.updater;
+            if (!ipc) throw new Error("VencordNative.updater non disponible");
 
-            // Étape 1 : déclenche checkForUpdates côté main pour récupérer l'URL
-            if (ipc?.update) await ipc.update();
-
-            // Étape 2 : applique la mise à jour (télécharge + extrait)
-            setStatus("Installation de la mise à jour...");
-            const ok = await (ipc?.rebuild ?? ipc?.build)?.();
-
-            if (ok === false) {
-                // L'update a été téléchargée mais nécessite un redémarrage manuel
-                setStatus("✓ Mise à jour prête — redémarrage dans 2s...");
-            } else {
-                setStatus("✓ Mise à jour appliquée — redémarrage...");
+            // Étape 1 : fetch GitHub metadata → stocke l'URL du zip dans le main process
+            const updateRes: { ok: boolean; value?: boolean; error?: any; } = await ipc.update();
+            if (!updateRes?.ok) {
+                throw new Error(updateRes?.error?.message ?? "Échec de la vérification des mises à jour");
             }
 
-            // Redémarrage propre via Electron
+            // Étape 2 : télécharge le zip + extrait dans dist/ (PowerShell)
+            setStatus("✓ Téléchargé ! Extraction en cours...");
+            const buildRes: { ok: boolean; value?: boolean; error?: any; } = await ipc.rebuild();
+            if (!buildRes?.ok) {
+                // IpcRes ok=false → l'erreur est dans buildRes.error
+                const errMsg = buildRes?.error?.message ?? JSON.stringify(buildRes?.error) ?? "Échec de l'installation";
+                throw new Error(errMsg);
+            }
+
+            setStatus("✓ Mise à jour appliquée — redémarrage dans 2s...");
+
+            // Redémarrage propre via le handler RELAUNCH_APP du main process
             setTimeout(() => {
                 try {
-                    const { relaunch } = require("@utils/native");
-                    relaunch();
+                    VencordNative.nightcord?.relaunch?.();
                 } catch {
-                    // Fallback si relaunch n'est pas dispo
+                    // Fallback Discord Desktop
                     (window as any).DiscordNative?.app?.relaunch?.();
                     window.location.reload();
                 }
             }, 2000);
-        } catch (e) {
+        } catch (e: any) {
             console.error("[NightcordUpdater] Error mise à jour:", e);
-            setStatus("❌ Erreur. Vérifie ta connexion ou redémarre manuellement.");
+            const msg = e?.message ? e.message.substring(0, 120) : "Erreur inconnue";
+            setStatus(`❌ ${msg}. Vérifie ta connexion ou redémarre manuellement.`);
             setLoading(false);
+            updateAttempted = false; // Permet un retry
         }
     }
 
