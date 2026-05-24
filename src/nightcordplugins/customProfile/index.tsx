@@ -1339,13 +1339,27 @@ export default definePlugin({
             if (US && !US._cp_perfect_hook) {
                 const origCurrent = US.getCurrentUser.bind(US);
 
+                // Fast-path cache: skip clone work if user object + data version are unchanged
+                let _lastRealUser: any = null;
+                let _lastFakeResult: any = null;
+                let _lastCacheVersion = -1;
+
                 US.getCurrentUser = () => {
                     const realUser = origCurrent();
-                    // Continuous update to guarantee we catch the real username
-                    // even if the component launched before WebSocket connection!
                     if (realUser) {
-                        if (realUser.username) _realUsername = realUser.username;
-                        if (realUser.globalName) _realGlobalName = realUser.globalName;
+                        // Update name cache only when the user object itself changes
+                        if (realUser !== _lastRealUser) {
+                            if (realUser.username) _realUsername = realUser.username;
+                            if (realUser.globalName) _realGlobalName = realUser.globalName;
+                        }
+                        // Return cached clone if nothing changed
+                        if (realUser === _lastRealUser && _lastCacheVersion === _dataVersion && _lastFakeResult) {
+                            return _lastFakeResult;
+                        }
+                        _lastRealUser = realUser;
+                        _lastCacheVersion = _dataVersion;
+                        _lastFakeResult = this.fakeCurrentUser(realUser);
+                        return _lastFakeResult;
                     }
                     return this.fakeCurrentUser(realUser);
                 };
@@ -1619,9 +1633,6 @@ export default definePlugin({
                 if (storedData.customBadgeIds?.includes("orbs")) {
                     badgeList.push({ description: "Orbs — Apprentice", iconSrc: "https://cdn.discordapp.com/badge-icons/83d8a1eb09a8d64e59233eec5d4d5c2d.png", position: 0, props: { style } });
                 }
-
-                badges.push(...badgeList);
-                return badges;
 
                 badges.push(...badgeList);
                 return badges;

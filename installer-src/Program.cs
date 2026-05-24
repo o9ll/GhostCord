@@ -70,8 +70,31 @@ namespace NightcordInstaller
         private async void InitializeWebView()
         {
             var userDataFolder = Path.Combine(Path.GetTempPath(), "NightcordInstaller_WebView2");
-            var env = await CoreWebView2Environment.CreateAsync(null, userDataFolder);
-            await _webView.EnsureCoreWebView2Async(env);
+            CoreWebView2Environment env;
+            try
+            {
+                env = await CoreWebView2Environment.CreateAsync(null, userDataFolder);
+                await _webView.EnsureCoreWebView2Async(env);
+            }
+            catch (Exception ex) when (
+                ex is System.Runtime.InteropServices.COMException ||
+                ex.HResult == unchecked((int)0x80070002) ||
+                ex.Message.Contains("WebView2") ||
+                ex.Message.Contains("0x80070002")
+            )
+            {
+                // WebView2 Runtime not installed on this machine
+                MessageBox.Show(
+                    "Microsoft Edge WebView2 Runtime is required to run the Nightcord Installer but was not found on your system.\n\n" +
+                    "Please download and install it from:\nhttps://aka.ms/webview2\n\n" +
+                    "After installing, restart the Nightcord Installer.",
+                    "WebView2 Runtime Required",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error
+                );
+                Application.Exit();
+                return;
+            }
 
             _backend = new NightcordBackend(this, _webView);
             _webView.CoreWebView2.AddHostObjectToScript("backend", _backend);
@@ -81,6 +104,7 @@ namespace NightcordInstaller
                 window.nightcord = {
                     detectDiscord: async () => JSON.parse(await chrome.webview.hostObjects.backend.DetectDiscord()),
                     isInjected: async (path) => await chrome.webview.hostObjects.backend.IsInjected(path),
+                    hasThirdPartyMod: async (path) => await chrome.webview.hostObjects.backend.HasThirdPartyMod(path),
                     inject: async (path) => JSON.parse(await chrome.webview.hostObjects.backend.Inject(path)),
                     startInject: (path) => JSON.parse(chrome.webview.hostObjects.sync.backend.StartInject(path)),
                     getInjectStatus: () => JSON.parse(chrome.webview.hostObjects.sync.backend.GetInjectStatus()),
@@ -198,9 +222,28 @@ namespace NightcordInstaller
         public async Task<bool> IsInjected(string path)
         {
             return await Task.Run(() => {
-                var appDir = Path.Combine(path, "app");
-                var pkgPath = Path.Combine(appDir, "package.json");
+                var appDir = System.IO.Path.Combine(path, "app");
+                var pkgPath = System.IO.Path.Combine(appDir, "package.json");
                 return Directory.Exists(appDir) && File.Exists(pkgPath) && File.ReadAllText(pkgPath).Contains("\"nightcord\"");
+            });
+        }
+
+        /// <summary>
+        /// Returns true if a third-party mod (Vencord, Equicord, OpenAsar) is detected
+        /// but Nightcord is NOT yet injected.
+        /// </summary>
+        public async Task<bool> HasThirdPartyMod(string path)
+        {
+            return await Task.Run(() => {
+                var appDir = System.IO.Path.Combine(path, "app");
+                var pkgPath = System.IO.Path.Combine(appDir, "package.json");
+                if (!Directory.Exists(appDir) || !File.Exists(pkgPath)) return false;
+                var content = File.ReadAllText(pkgPath);
+                // Already Nightcord → not a third-party mod
+                if (content.Contains("\"nightcord\"")) return false;
+                return content.Contains("vencord", StringComparison.OrdinalIgnoreCase)
+                    || content.Contains("equicord", StringComparison.OrdinalIgnoreCase)
+                    || content.Contains("openasar", StringComparison.OrdinalIgnoreCase);
             });
         }
 
@@ -436,36 +479,62 @@ namespace NightcordInstaller
             SetProgress(90, "Closing Discord...");
             KillDiscord(resPath);
 
-            SetProgress(92, "Configuring loader...");
+            SetProgress(91, "Removing previous mod injection (Vencord / Equicord / OpenAsar)...");
+            // ── NETTOYAGE COMPLET DE TOUTE INJECTION PRÉCÉDENTE ──────────────────────
+            // 1. Supprimer le dossier app/ quel que soit le mod qui l'a créé
             if (Directory.Exists(appDir))
             {
-                var pkg = Path.Combine(appDir, "package.json");
-                if (File.Exists(pkg) && File.ReadAllText(pkg).Contains("\"nightcord\"")) {
-                    WriteLoader(appDir);
-                    CopyAssetsToDiscord(resPath);
-                    SetProgress(99, "Starting Discord...");
-                    StartDiscord(resPath);
-                    return;
-                }
-                
-                // Si Vencord ou un autre mod est là, on le supprime de force
+                // Déjà Nightcord → on réinjecte proprement sans bail-out partiel
                 try { Directory.Delete(appDir, true); } catch { }
             }
 
-            // Nettoyage extrême : On détruit les faux app.asar créés par Vencord/OpenAsar (ils font moins de 1 Mo)
-            if (File.Exists(appAsar) && new FileInfo(appAsar).Length < 1000000) {
+            // 2. Supprimer tout app.asar faux (< 2 MB) créé par Vencord/OpenAsar/Equicord
+            //    Le vrai app.asar Discord fait entre 40 MB et 80 MB.
+            if (File.Exists(appAsar) && new FileInfo(appAsar).Length < 2_000_000)
+            {
                 File.Delete(appAsar);
             }
 
-            // Si app.asar existe encore, c'est le vrai (Discord vient d'être mis à jour ou installé)
+            // 3. Chercher un backup fait par un mod tiers (Vencord utilise _app.asar,
+            //    Equicord aussi, OpenAsar utilise original_app.asar)
+            string[] thirdPartyBackups = { "_app.asar", "original_app.asar", "app.asar.bak" };
+            foreach (var bkName in thirdPartyBackups)
+            {
+                var bkPath = Path.Combine(resPath, bkName);
+                // C'est un vrai backup si sa taille est > 2 MB
+                if (File.Exists(bkPath) && new FileInfo(bkPath).Length > 2_000_000)
+                {
+                    // Si app.asar est absent ou corrompu, restaurer ce backup en tant que app.asar
+                    if (!File.Exists(appAsar) || new FileInfo(appAsar).Length < 2_000_000)
+                    {
+                        if (File.Exists(appAsar)) File.Delete(appAsar);
+                        // Copier (pas déplacer) pour ne pas perdre le backup si une erreur survient
+                        File.Copy(bkPath, appAsar);
+                    }
+                    break;
+                }
+            }
+
+            // 4. Nettoyer les patches dans discord_desktop_core que Vencord/Equicord injectent
+            //    dans splashScreen.js et app_bootstrap (cause les settings parasites)
+            CleanModulePatches(resPath);
+
+            SetProgress(92, "Configuring Nightcord loader...");
+
+            // Vérification finale : on doit avoir un vrai app.asar ou un backup avant de continuer
+            if (!File.Exists(appAsar) && !File.Exists(backup))
+            {
+                throw new Exception(
+                    "Critical error: no valid app.asar found. " +
+                    "Please reinstall Discord from discord.com/download and try again."
+                );
+            }
+
+            // Créer le backup Nightcord si app.asar existe et qu'on n'a pas encore de backup
             if (File.Exists(appAsar))
             {
                 if (File.Exists(backup)) File.Delete(backup);
-                File.Move(appAsar, backup); // On crée/met à jour le backup
-            }
-            else if (!File.Exists(backup))
-            {
-                throw new Exception("Critical error: app.asar not found in the Discord folder.");
+                File.Move(appAsar, backup);
             }
 
             SetProgress(94, "Creating app directory...");
@@ -474,6 +543,107 @@ namespace NightcordInstaller
             CopyAssetsToDiscord(resPath);
             SetProgress(99, "Starting Discord...");
             StartDiscord(resPath);
+        }
+
+        /// <summary>
+        /// Nettoie les patches laissés par Vencord/Equicord dans les modules natifs Discord.
+        /// Ces patches (dans discord_desktop_core, etc.) font que les settings Discord affichent
+        /// encore l'interface Vencord/Equicord même après suppression de leur dossier app/.
+        /// </summary>
+        private void CleanModulePatches(string resPath)
+        {
+            try
+            {
+                // Chemins où Vencord/Equicord injectent leurs hooks
+                var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+                var appBase = Path.GetDirectoryName(resPath);
+
+                // Chercher le dossier modules (dans app-X.X.XXXX/modules/)
+                string[] modulesSearchPaths = {
+                    Path.Combine(appBase, "modules"),
+                    Path.Combine(resPath, "modules")
+                };
+
+                foreach (var modulesDir in modulesSearchPaths)
+                {
+                    if (!Directory.Exists(modulesDir)) continue;
+
+                    // Chercher discord_desktop_core-*/discord_desktop_core/
+                    foreach (var coreParent in Directory.GetDirectories(modulesDir, "discord_desktop_core*"))
+                    {
+                        var corePath = Path.Combine(coreParent, "discord_desktop_core");
+                        if (!Directory.Exists(corePath)) continue;
+
+                        // Fichiers patchés par Vencord/Equicord dans discord_desktop_core
+                        string[] patchedFiles = {
+                            Path.Combine(corePath, "index.js"),
+                            Path.Combine(corePath, "app", "app_bootstrap", "splashScreen.js"),
+                            Path.Combine(corePath, "app", "app_bootstrap", "index.js"),
+                        };
+
+                        foreach (var pf in patchedFiles)
+                        {
+                            if (!File.Exists(pf)) continue;
+                            var content = File.ReadAllText(pf);
+
+                            // Détecter la présence d'une injection Vencord/Equicord dans ce fichier
+                            bool isPatched = content.Contains("vencord", StringComparison.OrdinalIgnoreCase)
+                                         || content.Contains("equicord", StringComparison.OrdinalIgnoreCase)
+                                         || content.Contains("require(\"vencord")
+                                         || content.Contains("require('vencord")
+                                         || content.Contains("VencordNative")
+                                         || content.Contains("equilotl");
+
+                            if (!isPatched) continue;
+
+                            // Chercher un backup .orig ou .bak laissé par le mod
+                            string[] backupExts = { ".orig", ".bak", ".vanilla" };
+                            bool restored = false;
+                            foreach (var ext in backupExts)
+                            {
+                                var bk = pf + ext;
+                                if (File.Exists(bk))
+                                {
+                                    File.Copy(bk, pf, true);
+                                    File.Delete(bk);
+                                    restored = true;
+                                    break;
+                                }
+                            }
+
+                            if (!restored)
+                            {
+                                // Pas de backup → supprimer le fichier patché.
+                                // Discord le recrée au prochain démarrage depuis app.asar.
+                                try { File.Delete(pf); } catch { }
+                            }
+                        }
+
+                        // Supprimer le dossier app/ à l'intérieur de discord_desktop_core si injecté
+                        var innerAppDir = Path.Combine(corePath, "app");
+                        if (Directory.Exists(innerAppDir))
+                        {
+                            var innerPkg = Path.Combine(innerAppDir, "package.json");
+                            if (File.Exists(innerPkg))
+                            {
+                                var pkgContent = File.ReadAllText(innerPkg);
+                                bool isModInjection = pkgContent.Contains("vencord", StringComparison.OrdinalIgnoreCase)
+                                                   || pkgContent.Contains("equicord", StringComparison.OrdinalIgnoreCase)
+                                                   || pkgContent.Contains("openasar", StringComparison.OrdinalIgnoreCase);
+                                if (isModInjection)
+                                {
+                                    try { Directory.Delete(innerAppDir, true); } catch { }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                // Non-fatal : on log et on continue
+                Console.WriteLine($"[Nightcord] CleanModulePatches warning: {ex.Message}");
+            }
         }
 
         private void DoUninject(string resPath)

@@ -4,59 +4,85 @@ import { findByPropsLazy } from "@webpack";
 const MediaEngineStore = findByPropsLazy("getMediaEngine", "isKrispAvailable");
 const NativeModuleStore = findByPropsLazy("requireModule");
 
+/**
+ * Simulate the Studio → Voice Isolation cycle that users discovered as a
+ * workaround. This resets the WebRTC audio pipeline and makes Krisp process
+ * only background noise instead of muting the whole microphone signal.
+ *
+ * Timeline:
+ *   t=0   → set noiseSuppression to 'studio'   (reset pipeline)
+ *   t=400 → set noiseSuppression to 'krisp'    (activate isolation)
+ *   t=800 → done — Krisp is properly initialised
+ */
+function resetKrispPipeline() {
+    try {
+        const MediaSettingsStore = (window as any).Vencord?.Webpack?.findByProps?.("setNoiseSuppressionLevel", "getNoiseSuppression");
+        if (!MediaSettingsStore) return;
+
+        const original = MediaSettingsStore.getNoiseSuppression?.();
+
+        // Step 1: switch to Studio (full noise suppression — resets the pipeline)
+        MediaSettingsStore.setNoiseSuppressionLevel?.("studio");
+
+        // Step 2: switch back to Voice Isolation (Krisp) — now correctly initialised
+        setTimeout(() => {
+            try {
+                MediaSettingsStore.setNoiseSuppressionLevel?.("krisp");
+                console.log("[FixKrisp] Pipeline reset complete — Krisp correctly initialised.");
+            } catch { }
+        }, 400);
+    } catch { }
+}
+
 export default definePlugin({
     name: "FixKrisp",
-    description: "Forces Krisp (Noise Suppression) to be available by patching MediaEngine and eligibility checks.",
+    description: "Forces Krisp (Noise Suppression) to be available and auto-resets the audio pipeline so only background noise is suppressed (not the whole voice).",
     authors: [{ name: "Nightcord", id: 0n }],
     enabledByDefault: true,
     required: true,
 
+    _callCleanup: null as (() => void) | null,
+
     start() {
         console.log("[FixKrisp] Forcing Krisp eligibility...");
 
-        // Deep hook into Native modules to trick the UI before it even renders
+        // Patch DiscordNative at the native level (one-shot, no interval)
         const script = document.createElement("script");
         script.textContent = `
             (function() {
                 const patchNative = () => {
                     if (!window.DiscordNative?.nativeModules?.requireModule) return;
+                    if (window.DiscordNative.nativeModules._krispPatched) return;
                     
                     const originalRequire = window.DiscordNative.nativeModules.requireModule;
                     window.DiscordNative.nativeModules.requireModule = function(name) {
                         const module = originalRequire.apply(this, arguments);
-                        if (name === "discord_voice" && module) {
-                            // Intercept Krisp availability at the native level
-                            const originalGetSupportsKrisp = module.getSupportsKrisp;
+                        if (name === "discord_voice" && module && !module._krispPatched) {
                             module.getSupportsKrisp = () => true;
-                            
-                            // Force krisp to be considered as 'installed' and 'ready'
                             if (module.getKrispModelPath) {
-                                const originalPath = module.getKrispModelPath;
                                 module.getKrispModelPath = (cb) => {
                                     if (typeof cb === 'function') cb("found");
                                     return "found";
                                 };
                             }
+                            module._krispPatched = true;
                         }
                         return module;
                     };
-                    console.log("[FixKrisp] Native Voice Module Hooked");
+                    window.DiscordNative.nativeModules._krispPatched = true;
+                    console.log("[FixKrisp] Native Voice Module Hooked (one-shot)");
                 };
 
+                // One-shot availability patch (no interval)
                 const forceKrisp = () => {
                     try {
-                        // Force MediaEngineStore properties
                         const stores = window.Vencord?.Webpack?.findByProps("getMediaEngine", "isKrispAvailable");
                         if (stores) {
-                            if (stores.isKrispAvailable() !== true) {
-                                Object.defineProperty(stores, 'isKrispAvailable', { get: () => true, configurable: true });
-                                Object.defineProperty(stores, 'isKrispSupported', { get: () => true, configurable: true });
-                            }
+                            Object.defineProperty(stores, 'isKrispAvailable', { get: () => true, configurable: true });
+                            Object.defineProperty(stores, 'isKrispSupported', { get: () => true, configurable: true });
                         }
-
-                        // Force Experiment eligibility
                         const experiments = window.Vencord?.Webpack?.findByProps("getKrispExperiment");
-                        if (experiments && experiments.getKrispExperiment) {
+                        if (experiments?.getKrispExperiment) {
                             const res = experiments.getKrispExperiment();
                             if (res) res.eligible = true;
                         }
@@ -64,11 +90,27 @@ export default definePlugin({
                 };
                 
                 patchNative();
-                setInterval(forceKrisp, 3000);
-                forceKrisp();
+                forceKrisp(); // run once, no interval
             })();
         `;
         document.head.appendChild(script);
+
+        // Auto-reset pipeline when user joins a voice channel
+        // This replaces the manual Studio → Isolation cycle
+        const handler = (event: any) => {
+            if (event?.type === "VOICE_CHANNEL_SELECT" && event.channelId) {
+                // Small delay to let Discord connect the audio engine first
+                setTimeout(() => resetKrispPipeline(), 1200);
+            }
+        };
+        try {
+            const FD = (window as any).Vencord?.Webpack?.findByProps?.("dispatch", "subscribe");
+            FD?.subscribe?.("VOICE_CHANNEL_SELECT", handler);
+            this._callCleanup = () => FD?.unsubscribe?.("VOICE_CHANNEL_SELECT", handler);
+        } catch { }
+
+        // Also run once on startup for users already in a call (e.g. after a reload)
+        setTimeout(() => resetKrispPipeline(), 2000);
 
         // Ensure UI displays it
         const style = document.createElement("style");
@@ -134,5 +176,10 @@ export default definePlugin({
                 }
             ]
         }
-    ]
+    ],
+
+    stop() {
+        this._callCleanup?.();
+        this._callCleanup = null;
+    }
 });

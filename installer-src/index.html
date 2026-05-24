@@ -761,20 +761,35 @@
         const d = discords[i];
         const icon = ICONS[d.name] || { emoji: '⚪', cls: 'stable' };
         let injected = false;
+        let hasThirdParty = false;
         try { injected = await window.nightcord.isInjected(d.path); } catch {}
-        renderCard(d, i, injected, icon.cls);
+        if (!injected) {
+          try { hasThirdParty = await window.nightcord.hasThirdPartyMod(d.path); } catch {}
+        }
+        renderCard(d, i, injected, icon.cls, hasThirdParty);
       }
 
       setStatus('idle', 'Select an installation target.');
     }
 
-    function renderCard(d, i, injected, iconCls) {
+    function renderCard(d, i, injected, iconCls, hasThirdParty = false) {
       const list = document.getElementById('discord-list');
       const icon = ICONS[d.name] || { emoji: '⚙️', cls: iconCls };
 
+      let statusBadge;
+      if (injected) {
+        statusBadge = `<span class="badge badge-injected">✓ injected</span>`;
+      } else if (hasThirdParty) {
+        statusBadge = `<span class="badge" style="background:rgba(251,191,36,0.15);color:var(--warn)">⚠ mod detected</span>`;
+      } else {
+        statusBadge = `<span class="badge badge-clean">clean</span>`;
+      }
+
       const card = document.createElement('div');
       card.className = 'discord-card';
+      if (hasThirdParty && !injected) card.style.borderColor = 'rgba(251,191,36,0.35)';
       card.dataset.index = i;
+      card.dataset.thirdParty = hasThirdParty ? '1' : '0';
       card.innerHTML = `
         <div class="card-left">
           <div class="card-icon ${icon.cls || iconCls}">${icon.html || icon.emoji || '⚙️'}</div>
@@ -785,7 +800,7 @@
         </div>
         <div class="card-right">
           <span class="badge badge-version">v${d.version}</span>
-          <span class="badge ${injected ? 'badge-injected' : 'badge-clean'}">${injected ? '✓ injected' : 'clean'}</span>
+          ${statusBadge}
           <div class="radio"></div>
         </div>
       `;
@@ -800,7 +815,16 @@
       });
       document.getElementById('btn-inject').disabled = false;
       document.getElementById('btn-uninject').disabled = false;
-      setStatus('idle', `Selected: ${selected.name} — ${selected.path}`);
+      // Warn if a third-party mod is detected
+      const card = document.querySelectorAll('.discord-card')[index];
+      const isThirdParty = card && card.dataset.thirdParty === '1';
+      if (isThirdParty) {
+        setStatus('loading', `⚠ ${selected.name}: Vencord/Equicord detected — clicking Inject will replace it with Nightcord.`);
+        document.getElementById('btn-inject').textContent = 'Replace with Nightcord';
+      } else {
+        setStatus('idle', `Selected: ${selected.name} — ${selected.path}`);
+        document.getElementById('btn-inject').textContent = 'Inject Nightcord';
+      }
     }
 
     function toggleSettingsModal() {
