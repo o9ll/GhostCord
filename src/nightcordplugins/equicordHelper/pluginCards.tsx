@@ -17,10 +17,70 @@ import { TooltipContainer } from "@components/TooltipContainer";
 import { EQUIBOT_USER_ID, NIGHTCORD_BOT_USER_ID } from "@utils/constants";
 import { isEquicordGuild, isEquicordSupport } from "@utils/misc";
 import { Message } from "@vencord/discord-types";
-import { showToast, Tooltip, useMemo } from "@webpack/common";
+import { Button, showToast, Tooltip, useMemo, useState, useEffect } from "@webpack/common";
 import { JSX } from "react";
 
 import plugins, { ExcludedPlugins } from "~plugins";
+
+// ─── Tutorial detection ───────────────────────────────────────────────────────
+// Cache: pluginName (lowercased) → tutorial URL or null
+const tutorialCache = new Map<string, string | null>();
+
+const TUTORIALS_API_URL = "https://api.github.com/repos/nightcordoff/nightcord-tutorials/contents/videos";
+
+// Fetch the tutorial list once and populate cache
+let _tutorialsFetchPromise: Promise<void> | null = null;
+function ensureTutorialsFetched(): Promise<void> {
+    if (_tutorialsFetchPromise) return _tutorialsFetchPromise;
+    _tutorialsFetchPromise = fetch(TUTORIALS_API_URL, {
+        headers: { "Accept": "application/vnd.github.v3+json" },
+        cache: "force-cache",
+    })
+        .then(r => r.json())
+        .then((files: Array<{ name: string; html_url: string; download_url: string | null; }>) => {
+            if (!Array.isArray(files)) return;
+            for (const f of files) {
+                // File name like "FakeDM.mp4" or "fakeDM.webm" → key "fakedm"
+                const key = f.name.replace(/\.[^.]+$/, "").toLowerCase().replace(/\s+/g, "");
+                // Prefer raw URL so it can be opened/embedded; fall back to html_url
+                const url = f.download_url ?? f.html_url;
+                tutorialCache.set(key, url);
+            }
+        })
+        .catch(() => { _tutorialsFetchPromise = null; });
+    return _tutorialsFetchPromise;
+}
+
+function useTutorialUrl(pluginName: string | null): string | null {
+    const [url, setUrl] = useState<string | null>(null);
+    useEffect(() => {
+        if (!pluginName) return;
+        const key = pluginName.toLowerCase().replace(/\s+/g, "");
+        if (tutorialCache.has(key)) {
+            setUrl(tutorialCache.get(key) ?? null);
+            return;
+        }
+        ensureTutorialsFetched().then(() => {
+            setUrl(tutorialCache.get(key) ?? null);
+        });
+    }, [pluginName]);
+    return url;
+}
+
+function TutorialButton({ pluginName }: { pluginName: string; }) {
+    const tutorialUrl = useTutorialUrl(pluginName);
+    if (!tutorialUrl) return null;
+    return (
+        <Button
+            color={Button.Colors.BRAND}
+            size={Button.Sizes.SMALL}
+            style={{ marginTop: "4px" }}
+            onClick={() => window.open(tutorialUrl, "_blank")}
+        >
+            Show Tutorial
+        </Button>
+    );
+}
 
 export function ChatPluginCard({ url, description }: { url: string, description: string; }) {
     const pluginNameFromUrl = decodeURIComponent(new URL(url).pathname.split("/")[2]);
@@ -102,11 +162,14 @@ export function ChatPluginCard({ url, description }: { url: string, description:
     }
 
     return (
-        <PluginCard
-            key={p.name}
-            onRestartNeeded={onRestartNeeded}
-            plugin={p}
-        />
+        <>
+            <PluginCard
+                key={p.name}
+                onRestartNeeded={onRestartNeeded}
+                plugin={p}
+            />
+            <TutorialButton pluginName={pluginName} />
+        </>
     );
 }
 
