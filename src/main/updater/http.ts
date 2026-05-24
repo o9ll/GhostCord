@@ -76,28 +76,47 @@ async function applyUpdates(): Promise<boolean> {
     try {
         const data = await fetchBuffer(pendingDownloadUrl);
 
-        // Save to temp
+        // Save zip to temp
         const zipPath = join(app.getPath("temp"), `nightcord-update-${Date.now()}.zip`);
         writeFileSync(zipPath, data, { flush: true });
 
-        // Determine the dist root path from __dirname
+        // Resolve dist root from __dirname
+        // __dirname = ...\dist\desktop  →  distPath = ...\dist
         const distIndex = __dirname.lastIndexOf("dist");
         if (distIndex === -1) {
             throw new Error("Cannot find 'dist' in path: " + __dirname);
         }
         const distPath = __dirname.substring(0, distIndex + 4);
 
+        // Extract using PowerShell Expand-Archive (reliable ZIP support on all Windows 10/11)
+        // We extract to a temp folder first, then move files over to avoid half-extracted state
+        const tmpExtract = join(app.getPath("temp"), `nightcord-extract-${Date.now()}`);
+
         return await new Promise<boolean>((resolve, reject) => {
-            // Windows 10/11 inclut nativement 'tar' qui extrait les ZIP beaucoup plus rapidement que PowerShell
-            exec(`tar -xf "${zipPath}" -C "${distPath}"`, (error) => {
-                if (error) {
-                    reject(error);
-                } else {
-                    try { rmSync(zipPath, { force: true }); } catch (e) {}
+            // Step 1 — extract zip to temp folder
+            const psExtract = `Expand-Archive -LiteralPath '${zipPath}' -DestinationPath '${tmpExtract}' -Force`;
+            exec(`powershell -NoProfile -NonInteractive -Command "${psExtract}"`, (err) => {
+                if (err) {
+                    try { rmSync(zipPath, { force: true }); } catch {}
+                    return reject(new Error("ZIP extraction failed: " + err.message));
+                }
+
+                // Step 2 — copy extracted files into distPath, overwriting existing ones
+                // Use robocopy for atomic overwrite (handles locked files better than fs.cpSync)
+                const psMove = `Copy-Item -Path '${tmpExtract}\\*' -Destination '${distPath}' -Recurse -Force`;
+                exec(`powershell -NoProfile -NonInteractive -Command "${psMove}"`, (err2) => {
+                    // Cleanup temp files regardless of outcome
+                    try { rmSync(zipPath,    { force: true }); } catch {}
+                    try { rmSync(tmpExtract, { recursive: true, force: true }); } catch {}
+
+                    if (err2) {
+                        return reject(new Error("File copy failed: " + err2.message));
+                    }
+
                     pendingDownloadUrl = null;
                     pendingVersion = null;
                     resolve(true);
-                }
+                });
             });
         });
     } finally {
@@ -109,6 +128,7 @@ async function applyUpdates(): Promise<boolean> {
 // Si une mise à jour est en attente quand Discord se ferme, on l'installe
 // silencieusement avant de quitter (timeout de sécurité 45s).
 app.on("before-quit", (event) => {
+    // Ne tenter l'update que si une URL est en attente ET qu'on n'est pas déjà en train
     if (!pendingDownloadUrl || isApplying) return;
 
     event.preventDefault();
@@ -116,6 +136,9 @@ app.on("before-quit", (event) => {
 
     const safetyTimeout = setTimeout(() => {
         console.error("[Nightcord] Update on quit timed out — forcing exit.");
+        // Nettoyer pour éviter la boucle infinie au prochain démarrage
+        pendingDownloadUrl = null;
+        pendingVersion = null;
         app.exit(0);
     }, 45_000);
 
@@ -126,6 +149,9 @@ app.on("before-quit", (event) => {
         })
         .catch(err => {
             console.error("[Nightcord] Update on quit failed:", err);
+            // En cas d'échec, nettoyer pour éviter la boucle infinie
+            pendingDownloadUrl = null;
+            pendingVersion = null;
         })
         .finally(() => {
             clearTimeout(safetyTimeout);

@@ -21,11 +21,19 @@ let updaterWindow: BrowserWindow | null = null;
 autoUpdater.on("update-available", update => {
     if (State.store.updater?.ignoredVersion === update.version) return;
     if ((State.store.updater?.snoozeUntil ?? 0) > Date.now()) return;
+    // Anti-boucle : si on vient de télécharger et installer cette version, ne pas ré-ouvrir
+    if (update.version === app.getVersion()) return;
+    // Si la fenêtre updater est déjà ouverte pour cette version, ne pas en ouvrir une autre
+    if (updaterWindow && !updaterWindow.isDestroyed()) return;
 
     openUpdater(update);
 });
 
-autoUpdater.on("update-downloaded", () => setTimeout(() => autoUpdater.quitAndInstall(), 100));
+let updateDownloaded = false;
+autoUpdater.on("update-downloaded", () => {
+    updateDownloaded = true;
+    setTimeout(() => autoUpdater.quitAndInstall(false, true), 100);
+});
 autoUpdater.on("download-progress", p =>
     updaterWindow?.webContents.send(UpdaterIpcEvents.DOWNLOAD_PROGRESS, p.percent)
 );
@@ -35,7 +43,17 @@ autoUpdater.autoDownload = false;
 autoUpdater.autoInstallOnAppQuit = false;
 autoUpdater.fullChangelog = true;
 
-const isOutdated = autoUpdater.checkForUpdates().then(res => Boolean(res?.isUpdateAvailable));
+// Anti-boucle : on vérifie si l'app vient juste de se mettre à jour
+// en comparant la version installée avec la dernière version vérifiée
+let lastCheckedVersion: string | null = null;
+
+const isOutdated = autoUpdater.checkForUpdates().then(res => {
+    if (!res?.isUpdateAvailable) return false;
+    // Si l'update est déjà téléchargée (on vient de redémarrer après install), ignorer
+    if (res.updateInfo?.version === app.getVersion()) return false;
+    lastCheckedVersion = res.updateInfo?.version ?? null;
+    return true;
+});
 
 handle(IpcEvents.UPDATER_IS_OUTDATED, () => isOutdated);
 handle(IpcEvents.UPDATER_OPEN, async () => {

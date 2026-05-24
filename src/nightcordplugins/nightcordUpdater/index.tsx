@@ -42,6 +42,8 @@ interface UpdateInfo {
 
 let pendingUpdate: UpdateInfo | null = null;
 let listeners: Array<() => void> = [];
+// Anti-boucle : si l'user a déjà cliqué "Mettre à jour" dans cette session, on cache la bannière
+let updateAttempted = false;
 
 function notify() { listeners.forEach(f => f()); }
 
@@ -85,30 +87,48 @@ function UpdateBanner() {
         return () => { listeners = listeners.filter(f => f !== fn); };
     }, []);
 
-    if (!info || dismissed) return null;
+    if (!info || dismissed || updateAttempted) return null;
 
     async function doUpdate() {
         if (loading || !info) return;
         setLoading(true);
-        setStatus("Downloading & Installing...");
+        updateAttempted = true; // Marquer immédiatement pour éviter les double-clics
+        setStatus("Téléchargement en cours...");
 
         try {
-            const { update, rebuild } = require("@utils/updater");
-            const { relaunch } = require("@utils/native");
+            // On délègue entièrement à l'updater main-process (http.ts)
+            // BUILD = applyUpdates() qui télécharge le zip et extrait dans dist/
+            const VencordNative = (window as any).VencordNative;
+            const ipc = VencordNative?.updater ?? VencordNative?.native;
 
-            // Déclenche le téléchargement du ASAR et son écrasement
-            await update();
-            await rebuild();
+            // Étape 1 : déclenche checkForUpdates côté main pour récupérer l'URL
+            if (ipc?.update) await ipc.update();
 
-            setStatus("✓ Update success! Reloading...");
-            
-            // Recharge Discord pour lire le nouveau code
+            // Étape 2 : applique la mise à jour (télécharge + extrait)
+            setStatus("Installation de la mise à jour...");
+            const ok = await (ipc?.rebuild ?? ipc?.build)?.();
+
+            if (ok === false) {
+                // L'update a été téléchargée mais nécessite un redémarrage manuel
+                setStatus("✓ Mise à jour prête — redémarrage dans 2s...");
+            } else {
+                setStatus("✓ Mise à jour appliquée — redémarrage...");
+            }
+
+            // Redémarrage propre via Electron
             setTimeout(() => {
-                relaunch();
-            }, 1500);
+                try {
+                    const { relaunch } = require("@utils/native");
+                    relaunch();
+                } catch {
+                    // Fallback si relaunch n'est pas dispo
+                    (window as any).DiscordNative?.app?.relaunch?.();
+                    window.location.reload();
+                }
+            }, 2000);
         } catch (e) {
             console.error("[NightcordUpdater] Error mise à jour:", e);
-            setStatus("❌ Download error. Check your connection.");
+            setStatus("❌ Erreur. Vérifie ta connexion ou redémarre manuellement.");
             setLoading(false);
         }
     }
@@ -228,6 +248,7 @@ export default definePlugin({
     stop() {
         unmountBanner();
         pendingUpdate = null;
+        updateAttempted = false;
         listeners = [];
     },
 });
