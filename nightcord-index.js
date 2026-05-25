@@ -25,11 +25,13 @@ app.setPath("userData", nightcordData);
 app.setAppUserModelId("com.squirrel.Discord.Discord");
 
 // ── HOTFIX : Partage d'écran (Chargement infini & Crash) ──────────────────
-// Désactive le masquage des IPs locales par mDNS (cause le chargement infini des streams)
-app.commandLine.appendSwitch("disable-features", "WebRtcHideLocalIpsWithMdns");
-// Désactive le sandbox GPU car les modules de capture d'écran natifs de Discord (discord_voice)
-// font souvent crasher l'application s'ils ne peuvent pas accéder directement aux buffers.
-app.commandLine.appendSwitch("disable-gpu-sandbox");
+// NOTE : Les flags disable-gpu-sandbox et WebRtcHideLocalIpsWithMdns ont été retirés
+// car ils causaient :
+//   - Messages vocaux qui ne s'envoient pas (WebRTC encodage cassé)
+//   - Double appel / double connexion vocale
+//   - Plugin voicedictation qui ne détecte pas le micro
+// Ces flags désactivaient la protection IP locale et le sandbox GPU,
+// ce qui empêchait WebRTC de fonctionner correctement.
 app.commandLine.appendSwitch("enable-features", "WebRTCPipeWireCapturer");
 
 // ── FIX MODULES 403 : discord_overlay / discord_rpc / discord_dispatch ────
