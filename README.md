@@ -3,7 +3,7 @@
 
   # Nightcord
 
-  **The ultimate custom Discord client—optimized, secure, and feature-rich.**
+  **A custom Discord client built for people who actually care about how Discord runs.**
 
   [![Discord](https://img.shields.io/discord/1297590739911573585?color=5865F2&label=Discord&logo=discord&logoColor=white)](https://discord.gg/nightcord)
   [![License](https://img.shields.io/github/license/nightcordoff/nightcordclient?color=a855f7)](./LICENSE)
@@ -12,84 +12,65 @@
   ---
 </div>
 
-Nightcord is a highly optimized, fully featured fork of [Equicord](https://github.com/Equicord/Equicord), meticulously engineered to deliver an ultra-fluid, zero-obfuscation Discord desktop experience. With powerful built-in utilities, custom styling, and exclusive capabilities, Nightcord brings you the absolute best Discord experience without compromise.
+Nightcord is a fork of [Equicord](https://github.com/Equicord/Equicord), which itself builds on top of [Vencord](https://github.com/Vendicated/Vencord). We stripped out the obfuscation, cleaned things up, added our own stuff, and kept what works. No bloat, no nonsense.
 
 ---
 
-## ✨ Features
+## What's in it
 
-- **⚡ Ultimate Performance:** Completely free of heavy obfuscation and redundant bloat, resulting in significantly faster startup times and lower CPU/memory usage.
-- **🔄 Silent Auto-Updates:** Seamless background update system that checks and applies updates on startup, keeping you up-to-date without interrupting your flow.
-- **🔌 Advanced Plugin Engine:** Fully compatible with a vast library of plugins. Seamlessly install and load community modules directly via standard Git links.
-- **🎙️ Enhanced Voice DSP:** Native integration of hardware-optimized voice modules, designed to deliver crisp, clear, and physically louder audio signals.
-- **🎨 Elite Aesthetics:** Pre-configured premium styling rules, smooth hover states, glassmorphism UI touches, and custom icons.
-
----
-
-## 🚀 Quick Installation (Windows)
-
-Get up and running in seconds. Download and run our official automated installation script:
-
-1. Download the [**`nightcord-install.ps1`**](./nightcord-install.ps1) script to your computer.
-2. Right-click the file and select **Run with PowerShell**.
-3. Follow the quick on-screen instructions, restart Discord, and enjoy!
+- **Faster startup** — no obfuscation means the client loads noticeably quicker and sits lighter on your CPU and RAM.
+- **Auto-updates** — checks for updates in the background on launch and applies them silently. You don't have to think about it.
+- **Plugin support** — compatible with the existing plugin ecosystem. Install community plugins straight from Git links.
+- **Better audio** — hardware-optimized voice modules for cleaner, louder audio out of the box.
+- **Custom styling** — our own visual tweaks on top of the base: smoother UI, custom icons, a few quality-of-life details here and there.
 
 ---
 
-## 🛠️ Developer Setup & Compilation
+## Installation (Windows)
 
-If you want to build Nightcord from source, customize modules, or contribute to development:
+1. Download [**`nightcord-install.ps1`**](./nightcord-install.ps1)
+2. Right-click → **Run with PowerShell**
+3. Follow the steps, restart Discord, done.
 
-### Prerequisites
+---
 
-Ensure you have the following tools installed globally on your machine:
-* [**Git**](https://git-scm.com/download)
-* [**Node.JS (LTS Version)**](https://nodejs.dev/en/)
-* [**pnpm Package Manager**](https://pnpm.io/installation) — Install via terminal using:
-  ```bash
-  npm install -g pnpm
-  ```
+## Building from source
 
-### Build from Source
+If you want to dig into the code or build it yourself:
 
-Open your terminal or command prompt and execute the following commands sequentially:
+**You'll need:**
+- [Git](https://git-scm.com/download)
+- [Node.js (LTS)](https://nodejs.dev/en/)
+- [pnpm](https://pnpm.io/installation) — `npm install -g pnpm`
 
 ```bash
-# Clone the repository
 git clone https://github.com/nightcordoff/nightcordclient.git
-
-# Navigate into the project folder
 cd nightcordclient
-
-# Install dependencies
 pnpm install
-
-# Build the client core
 pnpm build
 ```
 
-### Inject into Discord
-
-Once the build is complete, inject the client into your official Discord application:
+Then inject into Discord:
 
 ```bash
 pnpm inject
 ```
 
-To revert back to the original Discord client, run:
+To go back to stock Discord:
+
 ```bash
 pnpm uninject
 ```
 
 ---
 
-## 📜 Credits & Acknowledgements
+## Credits
 
-We owe a special thank you to the brilliant developers behind [Equicord](https://github.com/Equicord/Equicord) and [Vencord](https://github.com/Vendicated/Vencord) for providing the outstanding architectural foundation that makes this project possible.
+Nightcord wouldn't exist without [Equicord](https://github.com/Equicord/Equicord) and [Vencord](https://github.com/Vendicated/Vencord). A huge chunk of what makes this work comes directly from their projects. We're fully aware of that and genuinely appreciate everything they've built — we're just taking it in a different direction. Big thanks to everyone who's contributed to both.
 
 ---
 
-## ⚖️ Legal Disclaimer
+## Disclaimer
 
-*Nightcord is not affiliated with, authorized, maintained, or endorsed by Discord Inc.* 
-Use of third-party clients or client modifications is technically against Discord's Terms of Service. By using Nightcord, you acknowledge that you do so at your own risk.
+*Nightcord is not affiliated with Discord Inc. in any way.*
+Using third-party clients is technically against Discord's Terms of Service. You're doing this at your own risk.
