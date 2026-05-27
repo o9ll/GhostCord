@@ -1,4 +1,4 @@
-/*
+ï»¿/*
  * Vencord, a Discord client mod
  * Copyright (c) 2026 Vendicated and contributors
  * SPDX-License-Identifier: GPL-3.0-or-later
@@ -73,7 +73,7 @@ ipcMain.handle(IpcEvents.WORLD_BOMB_TYPE, async (event, text: string, delay: num
     const { tmpdir } = require("os");
 
     if (!/^[\x20-\x7E]*$/.test(text)) {
-        throw new Error("WorldBombType: caractères non autorisés");
+        throw new Error("WorldBombType: caractÃ¨res non autorisÃ©s");
     }
     const safeDelay = Math.max(0, Math.min(10000, delay));
 
@@ -125,7 +125,7 @@ function runPowershellScript(psScript: string): Promise<void> {
             child.on("error", reject);
             child.on("exit", code => {
                 try { unlinkSync(tempFile); } catch {}
-                try { rmSync(tempDir, { recursive: true, force: true }); } catch {}
+try { rmSync(tempDir, { recursive: true, force: true }); } catch {}
                 if (code === 0) resolve();
                 else reject(new Error(`PowerShell exit code ${code}`));
             });
@@ -177,7 +177,7 @@ ipcMain.handle(IpcEvents.WORLD_BOMB_SEQUENCE, async (
     const { tmpdir } = require("os");
 
     if (!/^[\x20-\x7E]+$/.test(word)) {
-        throw new Error("WorldBombSequence: caractères non autorisés");
+        throw new Error("WorldBombSequence: caractÃ¨res non autorisÃ©s");
     }
     const safeLps = Math.max(1, Math.min(100, lps));
     const safeHumanChance = Math.max(0, Math.min(100, humanChance));
@@ -412,8 +412,8 @@ body { margin: 0; padding: 16px; background: transparent; overflow: hidden; font
 <body>
 <div class="nc-wb-overlay">
     <div class="nc-wb-header" id="drag-header">
-        <h3 style="margin: 0; font-size: 16px;">?? WorldBomb Helper</h3>
-        <div class="nc-wb-close" id="btn-close">?</div>
+        <h3 style="margin: 0; font-size: 16px;">ðŸŽ¯ WorldBomb Helper</h3>
+        <div class="nc-wb-close" id="btn-close">âœ•</div>
     </div>
     <div class="nc-wb-content">
         <div id="alphabet"></div>
@@ -423,7 +423,7 @@ body { margin: 0; padding: 16px; background: transparent; overflow: hidden; font
         </div>
         <div id="status">Chargement...</div>
         <div id="definition-container" style="display: none; margin-top: 10px; font-size: 11px; color: #d1d5db; font-style: italic; background: #374151; padding: 8px; border-radius: 8px; max-height: 80px; overflow-y: auto;">
-            <strong style="color: #60a5fa">Définition:</strong> <span id="definition-text"></span>
+            <strong style="color: #60a5fa">DÃ©finition:</strong> <span id="definition-text"></span>
         </div>
     </div>
 </div>
@@ -457,10 +457,10 @@ body { margin: 0; padding: 16px; background: transparent; overflow: hidden; font
         .then(results => {
             const allWords = results.flat();
             dictionary = Array.from(new Set(allWords.map(w => w.toLowerCase())))
-                .filter(w => /^[a-zœæéèêëàâäîïôöùûüç]+$/i.test(w));
-            document.getElementById('status').innerText = "Prêt (" + dictionary.length + " mots)";
+                .filter(w => /^[a-zÅ“Ã¦Ã©Ã¨ÃªÃ«Ã Ã¢Ã¤Ã®Ã¯Ã´Ã¶Ã¹Ã»Ã¼Ã§]+$/i.test(w));
+            document.getElementById('status').innerText = "PrÃªt (" + dictionary.length + " mots)";
         }).catch(err => {
-            document.getElementById('status').innerText = "Erreur réseau";
+            document.getElementById('status').innerText = "Erreur rÃ©seau";
             document.getElementById('status').style.color = "#ef4444";
         });
 
@@ -480,13 +480,13 @@ body { margin: 0; padding: 16px; background: transparent; overflow: hidden; font
                 if (pages) {
                     const textObj = Object.values(pages)[0];
                     if (textObj && textObj.extract) {
-                        const words = textObj.extract.toLowerCase().match(/[a-zàâçéèêëîïôûùüÿñæœ]+/g) || [];
+                        const words = textObj.extract.toLowerCase().match(/[a-zÃ Ã¢Ã§Ã©Ã¨ÃªÃ«Ã®Ã¯Ã´Ã»Ã¹Ã¼Ã¿Ã±Ã¦Å“]+/g) || [];
                         words.forEach(w => {
                             if (w.length > 3) themeWords.add(w);
                         });
                         if (themeWords.size > 0) {
                             const st = document.getElementById('status');
-                            st.innerText = st.innerText + " (+ Thème)";
+                            st.innerText = st.innerText + " (+ ThÃ¨me)";
                         }
                     }
                 }
@@ -552,7 +552,7 @@ body { margin: 0; padding: 16px; background: transparent; overflow: hidden; font
             return true;
         });
         if (validWords.length === 0) {
-            document.getElementById('status').innerText = "Aucun mot trouvé !";
+            document.getElementById('status').innerText = "Aucun mot trouvÃ© !";
             document.getElementById('status').style.color = "#ef4444";
             return;
         }
@@ -577,10 +577,10 @@ body { margin: 0; padding: 16px; background: transparent; overflow: hidden; font
             const defContainer = document.getElementById('definition-container');
             const defText = document.getElementById('definition-text');
             defContainer.style.display = 'block';
-            defText.innerText = 'Génération de la définition par IA...';
+            defText.innerText = 'GÃ©nÃ©ration de la dÃ©finition par IA...';
             
             if (!groqKey) {
-                defText.innerText = "Erreur: Clé API Groq introuvable.";
+                defText.innerText = "Erreur: ClÃ© API Groq introuvable.";
             } else {
                 fetch("https://api.groq.com/openai/v1/chat/completions", {
                     method: "POST",
@@ -594,7 +594,7 @@ body { margin: 0; padding: 16px; background: transparent; overflow: hidden; font
                         max_tokens: 150,
                         messages: [{
                             role: "user",
-                            content: 'Donne une définition très courte (1 seule phrase simple) pour le mot suivant, en expliquant ce que c\\'est concrètement, sans donner sa nature grammaticale. Mot : "' + bestWord + '"'
+                            content: 'Donne une dÃ©finition trÃ¨s courte (1 seule phrase simple) pour le mot suivant, en expliquant ce que c\\'est concrÃ¨tement, sans donner sa nature grammaticale. Mot : "' + bestWord + '"'
                         }]
                     }),
                 })
@@ -604,17 +604,17 @@ body { margin: 0; padding: 16px; background: transparent; overflow: hidden; font
                     if (ans) {
                         defText.innerText = ans.trim();
                     } else {
-                        defText.innerText = "L'IA n'a pas pu définir ce mot.";
+                        defText.innerText = "L'IA n'a pas pu dÃ©finir ce mot.";
                     }
                 })
-                .catch(() => defText.innerText = "Erreur réseau.");
+                .catch(() => defText.innerText = "Erreur rÃ©seau.");
             }
         }
         
 
         window.worldBombAPI.sequence(bestWord, lps, humanChance)
             .then(() => {
-                document.getElementById('status').innerText = "Prêt !";
+                document.getElementById('status').innerText = "PrÃªt !";
             })
             .catch(err => {
                 document.getElementById('status').innerText = "Erreur de saisie";
@@ -902,7 +902,7 @@ const OFFICIAL_UPDATE_URL = "https://github.com/nightcordoff/nightcord/releases/
 
 ipcMain.handle(IpcEvents.NIGHTCORD_DOWNLOAD_AND_RUN, async (_, url: string) => {
     if (url !== OFFICIAL_UPDATE_URL) {
-        throw new Error("URL de mise à jour non autorisée");
+        throw new Error("URL de mise Ã  jour non autorisÃ©e");
     }
 
     const https = require("https");
@@ -933,11 +933,11 @@ ipcMain.handle(IpcEvents.NIGHTCORD_DOWNLOAD_AND_RUN, async (_, url: string) => {
 
     const { response } = await dialog.showMessageBox({
         type: "info",
-        buttons: ["Installer la mise à jour", "Annuler"],
+        buttons: ["Installer la mise Ã  jour", "Annuler"],
         defaultId: 0,
-        title: "Mise à jour Nightcord",
-        message: "Une mise à jour de Nightcord est disponible.",
-        detail: "Voulez-vous installer la mise à jour maintenant ?"
+        title: "Mise Ã  jour Nightcord",
+        message: "Une mise Ã  jour de Nightcord est disponible.",
+        detail: "Voulez-vous installer la mise Ã  jour maintenant ?"
     });
     if (response === 1) return false;
 
@@ -1000,10 +1000,10 @@ ipcMain.handle(IpcEvents.INSTALL_VB_CABLE, async () => {
             buttons: ["Installer VB-Cable", "Annuler"],
             defaultId: 0,
             title: "Installation VB-Cable",
-            message: "VB-Cable doit être installé avec les droits administrateur.",
-            detail: "Une fenêtre UAC va s'ouvrir pour confirmer l'installation."
+            message: "VB-Cable doit Ãªtre installÃ© avec les droits administrateur.",
+            detail: "Une fenÃªtre UAC va s'ouvrir pour confirmer l'installation."
         });
-        if (response === 1) return { success: false, error: "Annulé par l'utilisateur" };
+        if (response === 1) return { success: false, error: "AnnulÃ© par l'utilisateur" };
 
         await new Promise<void>((resolve, reject) => {
             const child = spawn("powershell", [
