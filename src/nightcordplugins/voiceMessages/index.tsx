@@ -127,7 +127,7 @@ function generateWaveform(audioBuffer: AudioBuffer): string {
         let sum = 0;
         for (let sampleIdx = 0; sampleIdx < samplesPerBin; sampleIdx++) {
             const offset = binIdx * samplesPerBin + sampleIdx;
-            sum += channelData[offset + sampleIdx] ** 2;
+            sum += channelData[offset] ** 2;
         }
         bins[binIdx] = Math.floor(Math.sqrt(sum / samplesPerBin) * WAVEFORM_MAX_VALUE);
     }
