@@ -226,6 +226,7 @@ async function assignSounds(volume: number, packId: string) {
         for (let i = 0; i < 3; i++) {
             for (const url of chosenPack![key]) {
                 soundIndex++;
+                const idx = soundIndex;
 
                 allSounds[key].push({
                     playing: false,
@@ -233,7 +234,7 @@ async function assignSounds(volume: number, packId: string) {
                         volume,
                         preload: true,
                         persistent: true,
-                        onEnded: () => { allSounds[key][soundIndex].playing = false; }
+                        onEnded: () => { allSounds[key][idx].playing = false; }
                     })
                 });
             }
