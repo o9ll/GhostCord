@@ -515,7 +515,7 @@ fn resetDirectory(path_value: []const u8) !void {
 
 fn renamePath(old_path: []const u8, new_path: []const u8) !void {
     const cwd = std.Io.Dir.cwd();
-    try cwd.rename(getIo(), old_path, cwd, new_path);
+    try cwd.rename(old_path, cwd, new_path, getIo());
 }
 
 fn copyFileAbsolute(src: []const u8, dst: []const u8) !void {
@@ -565,5 +565,9 @@ fn writeFileAbsolute(path_value: []const u8, content: []const u8) !void {
     const cwd = std.Io.Dir.cwd();
     var file = try cwd.createFile(getIo(), path_value, .{});
     defer file.close(getIo());
-    try file.writer(getIo()).writeAll(content);
+
+    var buffer: [4096]u8 = undefined;
+    var writer = file.writer(getIo(), &buffer);
+    try writer.interface.writeAll(content);
+    try writer.interface.flush();
 }
