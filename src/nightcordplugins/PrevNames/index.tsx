@@ -60,11 +60,20 @@ interface PrevNamesResponse {
 }
 
 async function fetchPrevNames(userId: string): Promise<PrevNamesResponse> {
-    const res = await fetch(`${API_BASE}/prevnames/${userId}`);
-    if (res.status === 404) return { userId, prevnames: [] };
-    if (res.status === 429) throw new Error("RATE_LIMITED");
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return res.json();
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15_000); // 15s timeout
+    try {
+        const res = await fetch(`${API_BASE}/prevnames/${userId}`, { signal: controller.signal });
+        if (res.status === 404) return { userId, prevnames: [] };
+        if (res.status === 429) throw new Error("RATE_LIMITED");
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+    } catch (e: any) {
+        if (e?.name === "AbortError") throw new Error("TIMEOUT");
+        throw e;
+    } finally {
+        clearTimeout(timeout);
+    }
 }
 
 function getBannerUrl(userId: string, bannerHash: string | null | undefined, size = 480): string | null {
@@ -500,6 +509,18 @@ function PrevNamesModal({ modalProps, userId, username, avatarHash }: {
                     <div>
                         <div className="vc-pn-section-label vc-pn-skeleton" style={{ width: 80, height: 12, borderRadius: 4, marginBottom: 16 }} />
                         {Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} index={i} />)}
+                    </div>
+                )}
+
+                {/* Timeout */}
+                {!loading && error === "TIMEOUT" && (
+                    <div className="vc-pn-alert vc-pn-alert--warn">
+                        <div className="vc-pn-alert-icon"><ClockIcon size={20} color="#f0b232" /></div>
+                        <div className="vc-pn-alert-body">
+                            <span className="vc-pn-alert-title" style={{ color: "#f0b232" }}>Server waking up…</span>
+                            <span className="vc-pn-alert-desc" style={{ color: "#ffffff" }}>The API server was sleeping (Render free tier). It usually takes 30–60s to start. Please retry.</span>
+                        </div>
+                        <button onClick={load} className="vc-pn-retry-btn">Retry</button>
                     </div>
                 )}
 
