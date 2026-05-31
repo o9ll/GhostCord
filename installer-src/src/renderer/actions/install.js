@@ -24,8 +24,13 @@ const RESTART_DISCORD_PROGRESS = 100;
 
 const RELEASE_API = "https://git.nightcord.su/api/v1/repos/nightcord/nightcord/releases/latest";
 const DIST_ZIP = "nightcord-dist.zip";
+const PRE_INJECTION_WAIT_MS = 2000;
 
 const distDir = path.join(process.env.LOCALAPPDATA, "Nightcord", "dist");
+
+function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
 
 function getResourcesPath(discordCorePath) {
     let current = discordCorePath;
@@ -391,6 +396,9 @@ export default async function(config) {
     lognewline("Killing Discord...");
     const stopErr = await kill(channels, 0, false);
     if (stopErr) return fail();
+
+    log(`Waiting ${PRE_INJECTION_WAIT_MS / 1000} seconds for file locks to clear...`);
+    await sleep(PRE_INJECTION_WAIT_MS);
 
     lognewline("Injecting Nightcord shims...");
     const injectErr = await injectShims(paths);
