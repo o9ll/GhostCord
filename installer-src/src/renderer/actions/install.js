@@ -388,14 +388,18 @@ export default async function(config) {
         return fail();
     }
 
+    lognewline("Killing Discord...");
+    const stopErr = await kill(channels, 0, false);
+    if (stopErr) return fail();
+
     lognewline("Injecting Nightcord shims...");
     const injectErr = await injectShims(paths);
     if (injectErr) return fail();
     progress.set(INJECT_SHIM_PROGRESS);
 
     lognewline("Restarting Discord...");
-    const killErr = await kill(channels, (RESTART_DISCORD_PROGRESS - progress.value) / channels.length);
-    if (killErr) showRestartNotice(); 
+    const restartErr = await kill(channels, (RESTART_DISCORD_PROGRESS - progress.value) / channels.length);
+    if (restartErr) showRestartNotice(); 
     else log("✅ Discord restarted");
     progress.set(RESTART_DISCORD_PROGRESS);
 
