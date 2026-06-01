@@ -10,8 +10,9 @@ import { join } from "path";
 import { USER_AGENT } from "../constants";
 import { VENCORD_DIR } from "../vencordDir";
 import { downloadFile, fetchie } from "./http";
+import { domain } from "../../../../domain.json";
 
-const API_BASE = "https://git.nightcord.su/api/v1";
+const API_BASE = `https://git.${domain}/api/v1`;
 
 export interface ReleaseData {
     name: string;
@@ -36,7 +37,7 @@ export async function githubGet(endpoint: string) {
 
 export async function downloadVencordAsar() {
     await downloadFile(
-        "https://git.nightcord.su/nightcord/nightcord/releases/download/latest/Nightcord.asar",
+        `https://git.${domain}/nightcord/nightcord/releases/download/latest/Nightcord.asar`,
         VENCORD_DIR,
         {},
         { retryOnNetworkError: true }

@@ -166,14 +166,14 @@ export const PluginCards = ErrorBoundary.wrap(function PluginCards({ message }: 
         }
     }
 
-    // Process components â€” NightCord Bot (nightcord.su, Component v2 Container format)
+    // Process components â€” NightCord Bot (nightcord.ru, Component v2 Container format)
     if (message.author.id === NIGHTCORD_BOT_USER_ID) {
         const containerComponents = (message.components?.[0] as any)?.components;
         if (containerComponents?.length >= 3) {
             // Find ActionRow by presence of nested components (same pattern as Equibot check above)
             const actionRow = containerComponents.find((c: any) => c?.components);
             const pluginUrl = actionRow?.components?.[0]?.url;
-            if (pluginUrl?.startsWith("https://nightcord.su/plugins/")) {
+            if (pluginUrl?.startsWith("https://nightcord.ru/plugins/")) {
                 const pluginNameFromUrl = decodeURIComponent(new URL(pluginUrl).pathname.split("/")[2]);
                 const pluginNameNoSpaces = pluginNameFromUrl?.toLowerCase().replace(/\s+/g, "");
                 const actualPluginName =

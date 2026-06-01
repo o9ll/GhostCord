@@ -15,6 +15,7 @@ import monacoHtml from "file://monacoWin.html?minify&base64";
 import { FSWatcher, mkdirSync, readFileSync, watch, writeFileSync } from "fs";
 import { open, readdir, readFile, unlink } from "fs/promises";
 import { join, normalize } from "path";
+import {domain} from "../../domain.json";
 
 import { registerCspIpcHandlers } from "./csp/manager";
 import { ALLOWED_PROTOCOLS, DATA_DIR, QUICK_CSS_PATH, SETTINGS_DIR, THEMES_DIR } from "./utils/constants";
@@ -781,7 +782,7 @@ ipcMain.handle(IpcEvents.RELAUNCH_APP, async () => {
     app.exit(0);
 });
 
-const OFFICIAL_UPDATE_URL = "https://git.nightcord.su/nightcord/nightcord/releases/download/latest/Nightcord-Installer.exe";
+const OFFICIAL_UPDATE_URL = `https://git.${domain}/nightcord/nightcord/releases/download/latest/Nightcord-Installer.exe`;
 
 ipcMain.handle(IpcEvents.NIGHTCORD_DOWNLOAD_AND_RUN, async (_, url: string) => {
     if (url !== OFFICIAL_UPDATE_URL) {

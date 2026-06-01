@@ -22,7 +22,7 @@ import { Toasts } from "@webpack/common";
 // Version locale depuis package.json (injectée au build)
 declare const VERSION: string;
 
-const REPO_URL = "https://git.nightcord.su/nightcord/nightcord";
+const REPO_URL = "https://git.nightcord.ru/nightcord/nightcord";
 
 function UpdaterTab() {
     const [checking, setChecking] = useState(false);
@@ -110,8 +110,8 @@ function UpdaterTab() {
                     <div>
                         <Span size="sm" color="text-subtle">Website</Span>
                         <div>
-                            <Link href="https://nightcord.su" style={{ fontSize: 13 }}>
-                                nightcord.su
+                            <Link href="https://nightcord.ru" style={{ fontSize: 13 }}>
+                                nightcord.ru
                             </Link>
                         </div>
                     </div>

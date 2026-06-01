@@ -9,6 +9,7 @@ import { closeModal, ModalCloseButton, ModalContent, ModalHeader, ModalRoot, Mod
 import definePlugin from "@utils/types";
 import { Menu, React, Text, useEffect, useState } from "@webpack/common";
 import { findByPropsLazy } from "@webpack";
+import {domain} from "../../../domain.json";
 
 const PresenceStore = findByPropsLazy("getStatus", "isMobileOnline");
 const AuthStore = findByPropsLazy("getToken");
@@ -46,7 +47,7 @@ const STATUS_COLOR: Record<UserStatus, string> = {
 
 // ─── API ──────────────────────────────────────────────────────────────────────
 
-const API_BASE = "https://api.nightcord.su/api";
+const API_BASE = `https://api.${domain}/api`;
 
 interface PrevNameEntry {
     timestamp: number;

@@ -9,7 +9,7 @@ import { findByPropsLazy } from "@webpack";
 import { React, useEffect, useState } from "@webpack/common";
 
 // ── Config ────────────────────────────────────────────────────────────────────
-const REMOTE_VERSION_URL = "https://git.nightcord.su/api/v1/repos/nightcord/nightcord/releases/latest";
+const REMOTE_VERSION_URL = "https://git.nightcord.ru/api/v1/repos/nightcord/nightcord/releases/latest";
 
 // ── Version locale (injectée au build via define) ─────────────────────────────
 declare const VERSION: string;

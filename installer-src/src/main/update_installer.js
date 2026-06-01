@@ -2,6 +2,7 @@ import {dialog, shell} from "electron";
 import phin from "phin";
 const semverGreaterThan = require("semver/functions/gt");
 const {version} = require("../../package.json");
+const {domain} = require("../../../domain.json"); 
 
 const getJSON = phin.defaults({
     method: "GET",
@@ -12,7 +13,7 @@ const getJSON = phin.defaults({
 
 /* eslint-disable no-console */
 export default async function () {
-    const downloadUrl = "https://git.nightcord.su/api/v1/repos/nightcord/nightcord/releases/latest";
+    const downloadUrl = `https://git.${domain}/api/v1/repos/nightcord/nightcord/releases/latest`;
     console.info(`Nightcord Installer ${version}`);
 
     try {

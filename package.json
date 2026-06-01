@@ -4,13 +4,13 @@
     "version": "1.19.0",
     "description": "Everything Discord doesn't build, we create",
     "main": "dist/js/main.js",
-    "homepage": "https://git.nightcord.su/nightcord/nightcord",
+    "homepage": "https://git.nightcord.ru/nightcord/nightcord",
     "bugs": {
-        "url": "https://git.nightcord.su/nightcord/nightcord/issues"
+        "url": "https://git.nightcord.ru/nightcord/nightcord/issues"
     },
     "repository": {
         "type": "git",
-        "url": "https://git.nightcord.su/nightcord/nightcord.git"
+        "url": "https://git.nightcord.ru/nightcord/nightcord.git"
     },
     "license": "GPL-3.0-or-later",
     "author": "Equicord",

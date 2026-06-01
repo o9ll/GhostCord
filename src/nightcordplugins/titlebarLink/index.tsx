@@ -5,10 +5,11 @@
  */
 
 import definePlugin, { PluginNative } from "@utils/types";
+import {domain} from "../../../domain.json";
 
 const Native = VencordNative.pluginHelpers.TitlebarLink as PluginNative<typeof import("./native")>;
 
-const TARGET_URL = "https://nightcord.su";
+const TARGET_URL = `https://${domain}`;
 
 const CSS = `
 #nightcord-titlebar-btn {
@@ -59,7 +60,7 @@ function remove() {
 export default definePlugin({
     name: "TitlebarLink",
     enabledByDefault: true,
-    description: "Click on the central Discord title to open nightcord.su",
+    description: `Click on the central Discord title to open ${domain}`,
     authors: [{ name: "Nightcord", id: 0n }],
     required: true,
     patches: [],
