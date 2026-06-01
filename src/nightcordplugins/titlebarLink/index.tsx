@@ -5,7 +5,7 @@
  */
 
 import definePlugin, { PluginNative } from "@utils/types";
-import {domain} from "../../../domain.json";
+import {domain} from "../../../DOMAIN.json";
 
 const Native = VencordNative.pluginHelpers.TitlebarLink as PluginNative<typeof import("./native")>;
 

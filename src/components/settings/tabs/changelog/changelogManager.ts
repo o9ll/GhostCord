@@ -5,6 +5,7 @@
  */
 
 import { DataStore } from "@api/index";
+import {domain} from "../../../../../DOMAIN.json";
 
 import gitHash from "~git-hash";
 import plugins from "~plugins";
@@ -35,9 +36,9 @@ const LAST_SEEN_HASH_KEY = "EquicordChangelog_LastSeenHash";
 const KNOWN_PLUGINS_KEY = "EquicordChangelog_KnownPlugins";
 const KNOWN_SETTINGS_KEY = "EquicordChangelog_KnownSettings";
 const LAST_REPO_CHECK_KEY = "EquicordChangelog_LastRepoCheck";
-const GITEA_API_BASE = "https://git.nightcord.ru/api/v1/repos";
+const GITEA_API_BASE = `https://git.${domain}/api/v1/repos`;
 const NIGHTCORD_RELEASES_REPO = "nightcord/nightcord";
-const NIGHTCORD_REPO_URL = `https://git.nightcord.ru/${NIGHTCORD_RELEASES_REPO}`;
+const NIGHTCORD_REPO_URL = `https://git.${domain}/${NIGHTCORD_RELEASES_REPO}`;
 
 type KnownPluginSettingsMap = Map<string, Set<string>>;
 

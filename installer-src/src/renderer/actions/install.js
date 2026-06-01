@@ -8,7 +8,7 @@ import https from "https";
 import {execSync} from "child_process";
 import {killDiscord, startDiscord} from "./utils/kill";
 import {log, lognewline} from "./utils/log";
-import {domain} from "../../../domain.json"
+import {domain} from "../../../../DOMAIN.json"
 
 const MAKE_DIR_PROGRESS = 5;
 const FETCH_RELEASE_PROGRESS = 15;

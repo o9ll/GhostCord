@@ -19,6 +19,7 @@ import { isEquicordGuild, isEquicordSupport } from "@utils/misc";
 import { Message } from "@vencord/discord-types";
 import { showToast, Tooltip, useMemo } from "@webpack/common";
 import { JSX } from "react";
+import {domain} from "../../../DOMAIN.json";
 
 import plugins, { ExcludedPlugins } from "~plugins";
 
@@ -166,14 +167,14 @@ export const PluginCards = ErrorBoundary.wrap(function PluginCards({ message }: 
         }
     }
 
-    // Process components â€” NightCord Bot (nightcord.ru, Component v2 Container format)
+    // Process components â€” NightCord Bot (domain, Component v2 Container format)
     if (message.author.id === NIGHTCORD_BOT_USER_ID) {
         const containerComponents = (message.components?.[0] as any)?.components;
         if (containerComponents?.length >= 3) {
             // Find ActionRow by presence of nested components (same pattern as Equibot check above)
             const actionRow = containerComponents.find((c: any) => c?.components);
             const pluginUrl = actionRow?.components?.[0]?.url;
-            if (pluginUrl?.startsWith("https://nightcord.ru/plugins/")) {
+            if (pluginUrl?.startsWith(`https://${domain}/plugins/`)) {
                 const pluginNameFromUrl = decodeURIComponent(new URL(pluginUrl).pathname.split("/")[2]);
                 const pluginNameNoSpaces = pluginNameFromUrl?.toLowerCase().replace(/\s+/g, "");
                 const actualPluginName =

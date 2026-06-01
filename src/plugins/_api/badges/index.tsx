@@ -17,7 +17,7 @@
 */
 
 import "./fixDiscordBadgePadding.css";
-import {domain} from "../../../../domain.json"
+import {domain} from "../../../../DOMAIN.json"
 
 import { _getBadges, BadgePosition, BadgeUserArgs, ProfileBadge } from "@api/Badges";
 import ErrorBoundary from "@components/ErrorBoundary";

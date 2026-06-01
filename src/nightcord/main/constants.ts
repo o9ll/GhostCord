@@ -9,7 +9,7 @@ import { existsSync, mkdirSync } from "fs";
 import { dirname, join } from "path";
 
 import { CommandLine } from "./cli";
-import { domain } from "../../../domain.json";
+import { domain } from "../../../DOMAIN.json";
 
 const NightcordDir = dirname(process.execPath);
 

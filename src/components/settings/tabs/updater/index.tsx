@@ -18,11 +18,10 @@ import { relaunch } from "@utils/native";
 import { changes, checkForUpdates, rebuild, update, UpdateLogger } from "@utils/updater";
 import { React, useState } from "@webpack/common";
 import { Toasts } from "@webpack/common";
+import {domain} from "../../../../../DOMAIN.json";
 
 // Version locale depuis package.json (injectée au build)
 declare const VERSION: string;
-
-const REPO_URL = "https://git.nightcord.ru/nightcord/nightcord";
 
 function UpdaterTab() {
     const [checking, setChecking] = useState(false);
@@ -110,8 +109,8 @@ function UpdaterTab() {
                     <div>
                         <Span size="sm" color="text-subtle">Website</Span>
                         <div>
-                            <Link href="https://nightcord.ru" style={{ fontSize: 13 }}>
-                                nightcord.ru
+                            <Link href={`https://${domain}`} style={{ fontSize: 13 }}>
+                                {domain}
                             </Link>
                         </div>
                     </div>

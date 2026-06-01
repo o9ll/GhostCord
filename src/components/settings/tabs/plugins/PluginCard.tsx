@@ -14,6 +14,7 @@ import { ModalCloseButton, ModalContent, ModalHeader, ModalRoot, ModalSize,openM
 import { OptionType, Plugin } from "@utils/types";
 import { React, showToast, Text, Toasts } from "@webpack/common";
 import { Settings } from "Vencord";
+import {domain} from "../../../../../DOMAIN.json";
 
 import { TUTORIAL_CACHE } from "./components/Common";
 import { openPluginModal } from "./PluginModal";
@@ -43,7 +44,7 @@ function useTutorialExists(pluginName: string) {
 
         let cancelled = false;
         fetch(
-            `https://git.nightcord.ru/nightcord/nightcord-tutorials/raw/branch/main/videos/${pluginName}.mp4`,
+            `https://git.${domain}/nightcord-tutorials/raw/branch/main/videos/${pluginName}.mp4`,
             { method: "HEAD" }
         )
             .then(res => {
@@ -121,7 +122,7 @@ export function PluginCard({ plugin, disabled, onRestartNeeded, onMouseEnter, on
 
     const openTutorialVideo = (e: React.MouseEvent) => {
         e.stopPropagation();
-        const videoUrl = `https://git.nightcord.ru/nightcord/nightcord-tutorials/raw/branch/main/videos/${plugin.name}.mp4`;
+        const videoUrl = `https://git.${domain}/nightcord/nightcord-tutorials/raw/branch/main/videos/${plugin.name}.mp4`;
         openModal(props => (
             <ModalRoot {...props} size={ModalSize.DYNAMIC} className="nc-tutorial-modal">
                 <ModalHeader separator={false}>

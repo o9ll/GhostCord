@@ -25,7 +25,7 @@ import { join } from "path";
 import { DATA_DIR } from "./constants";
 import { crxToZip } from "./crxToZip";
 import { fetchBuffer } from "./http";
-import { domain } from "../../../domain.json";
+import { domain } from "../../../DOMAIN.json";
 
 const extensionCacheDir = join(DATA_DIR, "ExtensionCache");
 
