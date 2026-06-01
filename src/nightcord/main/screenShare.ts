@@ -25,18 +25,48 @@ export function registerScreenShareHandler() {
         return sources.find(s => s.id === id)?.thumbnail.toDataURL();
     });
 
+    // Warm up desktopCapturer on first launch so the first real call never cold-starts
+    let capturerReady = false;
+    async function warmUpCapturer() {
+        if (capturerReady) return;
+        try {
+            await desktopCapturer.getSources({ types: ["screen"], thumbnailSize: { width: 1, height: 1 } });
+            capturerReady = true;
+        } catch { /* ignore */ }
+    }
+
+    // Pre-warm as soon as the app is ready so it's done before the user clicks Go Live
+    warmUpCapturer();
+
     session.defaultSession.setDisplayMediaRequestHandler(async (request, callback) => {
+        // Ensure capturer is warm before proceeding (critical on first launch / after reboot)
+        if (!capturerReady) {
+            await warmUpCapturer().catch(() => {});
+            // Give the OS media stack an extra moment to settle
+            await new Promise(r => setTimeout(r, 300));
+        }
+
         // request full resolution on wayland right away because we always only end up with one result anyway
         const width = isWayland ? 1920 : 176;
-        const sources = await desktopCapturer
-            .getSources({
-                types: ["window", "screen"],
-                thumbnailSize: {
-                    width,
-                    height: width * (9 / 16)
-                }
-            })
-            .catch(err => console.error("Error during screenshare picker", err));
+
+        let sources: Awaited<ReturnType<typeof desktopCapturer.getSources>> | undefined;
+        // Retry once if the first call fails (race condition on cold start)
+        for (let attempt = 0; attempt < 2; attempt++) {
+            sources = await desktopCapturer
+                .getSources({
+                    types: ["window", "screen"],
+                    thumbnailSize: {
+                        width,
+                        height: width * (9 / 16)
+                    }
+                })
+                .catch(err => {
+                    console.error(`Error during screenshare picker (attempt ${attempt + 1})`, err);
+                    return undefined;
+                });
+            if (sources) break;
+            await new Promise(r => setTimeout(r, 500));
+        }
 
         if (!sources) return callback({});
 

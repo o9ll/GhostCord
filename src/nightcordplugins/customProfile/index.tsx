@@ -12,7 +12,10 @@ import { addHeaderBarButton, HeaderBarButton, removeHeaderBarButton } from "@api
 import { DataStore } from "@api/index";
 import { ModalCloseButton, ModalContent, ModalFooter, ModalHeader, ModalRoot, openModal } from "@utils/modal";
 import definePlugin from "@utils/types";
-import { AuthenticationStore, Button, FluxDispatcher, IconUtils, Menu, React, Select, SnowflakeUtils,UserStore } from "@webpack/common";
+import { AuthenticationStore, Button, FluxDispatcher, IconUtils, Menu, React, Select, SettingsRouter, SnowflakeUtils,UserStore } from "@webpack/common";
+import { Settings } from "@api/Settings";
+import { getPublicPluginConfig, saveOwnPluginConfig } from "../../api/PluginSync";
+import { getStoredToken } from "../../api/OAuth2";
 import virtualMerge from "virtual-merge";
 
 import { t } from "../autoTranslateNightcord";
@@ -145,6 +148,26 @@ let storedData: CustomProfileData = {};
 let isEnabled = false;
 let domObserver: MutationObserver | null = null;
 
+const publicProfilesCache = new Map<string, { fetched: boolean, data: CustomProfileData | null }>();
+
+async function fetchPublicProfileIfNeeded(userId: string) {
+    if (!Settings.seeAllCustomProfile) return;
+    if (publicProfilesCache.has(userId)) return;
+    
+    publicProfilesCache.set(userId, { fetched: false, data: null });
+    
+    const result = await getPublicPluginConfig("customProfile", userId);
+    publicProfilesCache.set(userId, { fetched: true, data: result?.settings || null });
+    
+    try {
+        const UPS = (Vencord as any).Webpack?.findByProps?.("getUserProfile", "getGuildMemberProfile");
+        if (UPS && UPS.emitChange) UPS.emitChange();
+        
+        const US = (Vencord as any).Webpack?.findByStoreName("UserStore");
+        if (US && US.emitChange) US.emitChange();
+    } catch {}
+}
+
 let cachedOriginalUser: any = null;
 let cachedFakeUser: any = null;
 let cachedDataHash: number = 0;
@@ -256,9 +279,16 @@ function applyAvatarPatchEarly() {
         if (!IU?.getUserAvatarURL) return;
         const orig = IU.getUserAvatarURL;
         IU.getUserAvatarURL = function (user: any, ...args: any[]) {
-            if (isEnabled && storedData.avatar) {
-                const uid = user?.id ?? user?.userId;
-                if (uid && isMe(uid)) return storedData.avatar;
+            if (!user) return orig(user, ...args);
+            const uid = user.id ?? user.userId;
+            if (isEnabled && storedData.avatar && uid && isMe(uid)) {
+                return storedData.avatar;
+            }
+            if (Settings.seeAllCustomProfile && uid) {
+                const cached = publicProfilesCache.get(uid);
+                if (cached?.fetched && cached.data?.avatar) {
+                    return cached.data.avatar;
+                }
             }
             return orig(user, ...args);
         };
@@ -799,6 +829,16 @@ function CustomProfileModal({ rootProps }: { rootProps: any; }) {
                 cachedFakeUser = null;
                 cachedOriginalUser = null;
                 _dataVersion++;
+
+                if (Settings.seeAllCustomProfile) {
+                    getStoredToken().then(t => {
+                        if (t) {
+                            saveOwnPluginConfig("customProfile", t, savedData).catch(e => {
+                                console.error("[CustomProfile] Failed to sync to cloud:", e);
+                            });
+                        }
+                    });
+                }
             }
 
             // Save all in localStorage + IndexedDB
@@ -948,7 +988,28 @@ function CustomProfileModal({ rootProps }: { rootProps: any; }) {
                         </button>
                     ))}
                 </div>
-                <div className="cp-hint">{t("Visual and local modifications only — persistent between restarts.")}</div>
+                <div className="cp-hint">
+                    <a
+                        role="button"
+                        style={{ color: "var(--text-link)", cursor: "pointer", fontWeight: 500 }}
+                        onClick={() => {
+                            rootProps.onClose();
+                            try {
+                                SettingsRouter.openUserSettings("equicord_main");
+                            } catch {
+                                try {
+                                    SettingsRouter.open("equicord_main");
+                                } catch {
+                                    try {
+                                        FluxDispatcher.dispatch({ type: "USER_SETTINGS_MODAL_OPEN", section: "equicord_main" });
+                                    } catch { }
+                                }
+                            }
+                        }}
+                    >
+                        Share your Custom Profile with everyone — click to manage in Nightcord Settings
+                    </a>
+                </div>
             </ModalContent>
             <ModalFooter className="cp-footer">
                 <button className="cp-btn cp-btn-ghost" onClick={rootProps.onClose}>{t("Cancel")}</button>
@@ -1207,6 +1268,132 @@ export default definePlugin({
         return clone;
     },
 
+    fakeOtherUser(realUser: any, data: CustomProfileData) {
+        if (!realUser || !realUser.id) return realUser;
+        const clone = Object.create(realUser);
+
+        if (data.email) clone.email = data.email;
+        if (data.phone) clone.phone = data.phone;
+
+        if (data.createdAt) {
+            const fakeCreatedAt = new Date(data.createdAt + "T12:00:00Z");
+            Object.defineProperty(clone, "createdAt", {
+                get: () => fakeCreatedAt,
+                configurable: true,
+                enumerable: true
+            });
+        }
+
+        if (data.decorationAsset) {
+            const decoData = {
+                asset: data.decorationAsset,
+                skuId: data.decorationAsset
+            };
+            clone.avatarDecoration = null;
+            clone.avatarDecorationData = decoData;
+        }
+
+        const wantedFlags = data.badgeFlags != null ? data.badgeFlags : realUser.publicFlags;
+        clone.publicFlags = wantedFlags;
+        clone.flags = wantedFlags;
+
+        if (data.nitro) {
+            clone.premiumType = 2;
+            const LEVEL_MONTHS = [1, 2, 3, 6, 12, 24, 36, 72];
+            const since = new Date();
+            since.setMonth(since.getMonth() - (LEVEL_MONTHS[data.nitroLevel!] ?? 1));
+            clone.premiumSince = since;
+
+            const bm = data.boostMonths ?? -1;
+            if (bm >= 0) {
+                const BOOST_M = [1, 2, 3, 6, 9, 12, 15, 18, 24];
+                const boostSince = new Date();
+                boostSince.setMonth(boostSince.getMonth() - (BOOST_M[bm] ?? 1));
+                clone.premiumGuildSince = boostSince;
+            } else {
+                clone.premiumGuildSince = null;
+            }
+        } else if (data.nitro === false) {
+            clone.premiumType = 0;
+            clone.premiumSince = null;
+            clone.premiumGuildSince = null;
+        }
+
+        clone.__cp_fake_other = true;
+        return clone;
+    },
+
+    hookOtherUserProfile(profile: any, data: CustomProfileData) {
+        if (!profile) return profile;
+        try {
+            const merged: any = {};
+
+            if (data.bio) merged.bio = data.bio;
+            if (data.pronouns) merged.pronouns = data.pronouns;
+            if (data.accentColor != null) merged.accentColor = data.accentColor;
+            if (data.banner) merged.banner = data.banner;
+
+            if (data.decorationAsset) {
+                const decoData = {
+                    asset: data.decorationAsset,
+                    skuId: data.decorationAsset
+                };
+                merged.avatarDecoration = null;
+                merged.avatarDecorationData = decoData;
+            }
+
+            if (data.nitro || data.badgeFlags != null) {
+                merged.premiumType = data.nitro ? 2 : 0;
+
+                if (data.nitro) {
+                    if (data.accentColor != null) {
+                        const c2 = data.accentColor2 ?? data.accentColor;
+                        merged.themeColors = [data.accentColor, c2];
+                    }
+                    const nl = data.nitroLevel ?? 0;
+                    const LEVEL_MONTHS = [1, 2, 3, 6, 12, 24, 36, 72];
+                    const since = new Date();
+                    since.setMonth(since.getMonth() - (LEVEL_MONTHS[nl] ?? 1));
+                    merged.premiumSince = since;
+
+                    const bm = data.boostMonths ?? -1;
+                    if (bm >= 0) {
+                        const BOOST_M = [1, 2, 3, 6, 9, 12, 15, 18, 24];
+                        const boostSince = new Date();
+                        boostSince.setMonth(boostSince.getMonth() - (BOOST_M[bm] ?? 1));
+                        merged.premiumGuildSince = boostSince;
+                    } else {
+                        merged.premiumGuildSince = null;
+                    }
+                } else {
+                    merged.premiumSince = null;
+                    merged.premiumGuildSince = null;
+                }
+
+                merged.publicFlags = (data.badgeFlags != null) ? data.badgeFlags : profile.publicFlags;
+                merged.badges = [];
+            } else if (data.nitro === false) {
+                merged.premiumType = profile.premiumType ?? 0;
+                merged.premiumSince = null;
+                merged.premiumGuildSince = null;
+            }
+
+            const badgesArr = Array.isArray(profile.badges) ? [...profile.badges] : [];
+            const customIds = data.customBadgeIds ?? [];
+            if (customIds.includes("quest")) badgesArr.push({ id: "quest", icon: "7d9ae358c8c5e118768335dbe68b4fb8", description: "Completed a quest" });
+            if (customIds.includes("orbs")) badgesArr.push({ id: "orbs", icon: "83d8a1eb09a8d64e59233eec5d4d5c2d", description: "Orbs — Apprentice" });
+            if (customIds.includes("oldname")) {
+                const dText = data.oldName ? "Originally known as " + data.oldName : "Originally known as ...";
+                badgesArr.push({ id: "legacy_username", icon: "6de6d34650760ba5551a79732e98ed60", description: dText });
+            }
+            if (badgesArr.length > 0) merged.badges = badgesArr;
+
+            return virtualMerge(profile, merged);
+        } catch (e) {
+            return profile;
+        }
+    },
+
     _cachedProfile: null as any,
     _cachedProfileInput: null as any,
     _cachedProfileVersion: 0,
@@ -1356,7 +1543,23 @@ export default definePlugin({
                 };
 
                 const origGet = US.getUser.bind(US);
-                US.getUser = (id: string) => isMe(id) ? this.fakeCurrentUser(origGet(id)) : origGet(id);
+                US.getUser = (id: string) => {
+                    const user = origGet(id);
+                    if (!user) return user;
+                    
+                    if (isEnabled && isMe(id)) {
+                        return this.fakeCurrentUser(user);
+                    }
+                    
+                    if (Settings.seeAllCustomProfile) {
+                        const cached = publicProfilesCache.get(id);
+                        if (cached?.fetched && cached.data) {
+                            return this.fakeOtherUser(user, cached.data);
+                        }
+                    }
+                    
+                    return user;
+                };
                 US._cp_perfect_hook = true;
             }
         } catch { }
@@ -1369,8 +1572,21 @@ export default definePlugin({
                 UPS.getUserProfile = (userId: string) => {
                     try {
                         const profile = origGetProfile(userId);
-                        if (!isEnabled || !userId || !isMe(userId) || !profile) return profile;
-                        return this.hookUserProfile(profile);
+                        if (!userId) return profile;
+                        
+                        if (isEnabled && isMe(userId) && profile) {
+                            return this.hookUserProfile(profile);
+                        }
+                        
+                        if (Settings.seeAllCustomProfile) {
+                            fetchPublicProfileIfNeeded(userId);
+                            const cached = publicProfilesCache.get(userId);
+                            if (cached?.fetched && cached.data && profile) {
+                                return this.hookOtherUserProfile(profile, cached.data);
+                            }
+                        }
+                        
+                        return profile;
                     } catch (e) {
                         console.error("[CustomProfile] Error in getUserProfile hook:", e);
                         return origGetProfile(userId);
@@ -1380,8 +1596,21 @@ export default definePlugin({
                 UPS.getGuildMemberProfile = (userId: string, guildId: string) => {
                     try {
                         const profile = origGetGuild(userId, guildId);
-                        if (!isEnabled || !userId || !isMe(userId) || !profile) return profile;
-                        return this.hookUserProfile(profile);
+                        if (!userId) return profile;
+                        
+                        if (isEnabled && isMe(userId) && profile) {
+                            return this.hookUserProfile(profile);
+                        }
+                        
+                        if (Settings.seeAllCustomProfile) {
+                            fetchPublicProfileIfNeeded(userId);
+                            const cached = publicProfilesCache.get(userId);
+                            if (cached?.fetched && cached.data && profile) {
+                                return this.hookOtherUserProfile(profile, cached.data);
+                            }
+                        }
+                        
+                        return profile;
                     } catch (e) {
                         console.error("[CustomProfile] Error in getGuildMemberProfile hook:", e);
                         return origGetGuild(userId, guildId);

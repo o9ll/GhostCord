@@ -1,4 +1,4 @@
-﻿/*
+/*
  * Vencord, a modification for Discord's desktop app
  * Copyright (c) 2022 Vendicated and contributors
  *
@@ -80,6 +80,7 @@ export interface Settings {
     | undefined;
     disableMinSize: boolean;
     winNativeTitleBar: boolean;
+    seeAllCustomProfile: boolean;
     plugins: {
         [plugin: string]: {
             enabled: boolean;
@@ -136,6 +137,7 @@ const DefaultSettings: Settings = {
     macosVibrancyStyle: undefined,
     disableMinSize: false,
     winNativeTitleBar: false,
+    seeAllCustomProfile: true,
     plugins: {},
 
     uiElements: {

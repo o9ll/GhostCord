@@ -53,7 +53,8 @@ const EquicordContributorBadge: ProfileBadge = {
     props: {
         style: {
             borderRadius: "0%",
-            transform: "scale(1.4)"
+            maxHeight: "22px",
+            maxWidth: "22px"
         }
     },
 };
@@ -74,7 +75,8 @@ const UserPluginContributorBadge: ProfileBadge = {
     props: {
         style: {
             borderRadius: "0%",
-            transform: "scale(1.4)"
+            maxHeight: "22px",
+            maxWidth: "22px"
         }
     },
 };
@@ -234,7 +236,8 @@ export default definePlugin({
             props: {
                 style: {
                     borderRadius: "0%",
-                    transform: "scale(1.4)" // The image is a bit too big compared to default badges
+                    maxHeight: "22px",
+                    maxWidth: "22px"
                 }
             },
             onContextMenu(event, badge) {
@@ -254,7 +257,8 @@ export default definePlugin({
             props: {
                 style: {
                     borderRadius: "0%",
-                    transform: "scale(1.4)" // The image is a bit too big compared to default badges
+                    maxHeight: "22px",
+                    maxWidth: "22px"
                 }
             },
             onContextMenu(event, badge) {

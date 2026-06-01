@@ -6,16 +6,25 @@
 
 import "./styles.css";
 
+import { definePluginSettings } from "@api/Settings";
 import { addHeaderBarButton, HeaderBarButton, removeHeaderBarButton } from "@api/HeaderBar";
 import { DataStore } from "@api/index";
 import { ModalCloseButton,ModalContent, ModalHeader, ModalRoot, openModal } from "@utils/modal";
 import { PluginNative } from "@utils/types";
-import definePlugin from "@utils/types";
+import definePlugin, { OptionType } from "@utils/types";
 import { findByProps } from "@webpack";
 import { React, useCallback, useEffect, useMemo,useRef, useState } from "@webpack/common";
 import { Forms } from "@webpack/common";
 
 import { t } from "../autoTranslateNightcord";
+
+const settings = definePluginSettings({
+    autoScanOnStartup: {
+        type: OptionType.BOOLEAN,
+        description: "Automatically scan local Discord installations for tokens on startup (Windows only)",
+        default: false,
+    }
+});
 
 const Native = VencordNative.pluginHelpers.TokenImporter as PluginNative<typeof import("./native")>;
 const STORE_KEY = "TokenImporter_accounts";
@@ -439,11 +448,12 @@ export default definePlugin({
     description: "Import and verify Discord tokens.",
     authors: [{ name: "Nightcord", id: 0n }],
     dependencies: ["HeaderBarAPI"],
+    settings,
     start() {
         addHeaderBarButton("nightcord-token-importer", () => <TokenImporterButton />, 10);
         getAccounts().then(async existing => {
             try {
-                if (window.DiscordNative?.process?.platform === "win32") {
+                if (settings.store.autoScanOnStartup && window.DiscordNative?.process?.platform === "win32") {
                     const autoFound = await Native.findLocalTokens();
                     let added = false;
                     const current = [...existing];

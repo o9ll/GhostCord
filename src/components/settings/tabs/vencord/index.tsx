@@ -10,6 +10,7 @@ import { isStealthModeEnabled, toggleStealthMode } from "@api/HeaderBar";
 import { openNotificationLogModal } from "@api/Notifications/notificationLog";
 import { plugins } from "@api/PluginManager";
 import { useSettings } from "@api/Settings";
+import { beginDiscordOAuth, checkOAuthToken, clearToken, getStoredToken, storeToken } from "../../../../api/OAuth2";
 import { Button } from "@components/Button";
 import { Card } from "@components/Card";
 import { Divider } from "@components/Divider";
@@ -190,6 +191,85 @@ function StealthModeButton() {
     );
 }
 
+function CustomProfileAuthSection() {
+    const [token, setToken] = React.useState<string | null>(null);
+    const [loading, setLoading] = React.useState(true);
+    const [authUrl, setAuthUrl] = React.useState<string | null>(null);
+
+    React.useEffect(() => {
+        getStoredToken().then(async t => {
+            if (t) {
+                const check = await checkOAuthToken(t);
+                if (check?.valid) {
+                    setToken(t);
+                } else {
+                    await clearToken();
+                }
+            }
+            setLoading(false);
+        });
+    }, []);
+
+    const handleLogin = async () => {
+        setLoading(true);
+        try {
+            const data = await beginDiscordOAuth();
+            setAuthUrl(data.url);
+            // Use VencordNative in Electron (Discord desktop), fallback to window.open for web
+            try {
+                await VencordNative.native.openExternal(data.url);
+            } catch {
+                window.open(data.url, "_blank");
+            }
+        } catch (e) {
+            console.error(e);
+        }
+        setLoading(false);
+    };
+
+    if (loading) return null;
+
+    if (token) {
+        return (
+            <Notice.Info className={Margins.bottom20} style={{ width: "100%" }}>
+                You are signed in to Nightcord Sync. Your custom profile is synchronized.
+            </Notice.Info>
+        );
+    }
+
+    return (
+        <Notice.Warning className={Margins.bottom20} style={{ width: "100%", overflow: "hidden" }}>
+            You are not signed in. <a role="button" onClick={handleLogin} style={{ cursor: "pointer", color: "var(--text-link)" }}>Sign in with Discord</a> to use Custom Profile Sync.
+            {authUrl && (
+                <div style={{ marginTop: "8px" }}>
+                    After signing in, paste your session token below:
+                    <input 
+                        type="password" 
+                        placeholder="Paste session token here and press Enter..." 
+                        style={{ width: "100%", marginTop: "4px", padding: "8px", borderRadius: "4px", background: "var(--background-secondary)", color: "var(--text-normal)", border: "none" }}
+                        onKeyDown={async e => {
+                            if (e.key === "Enter") {
+                                const t = e.currentTarget.value.trim();
+                                if (t) {
+                                    setLoading(true);
+                                    const check = await checkOAuthToken(t);
+                                    if (check?.valid) {
+                                        await storeToken(t);
+                                        setToken(t);
+                                    } else {
+                                        alert("Invalid token");
+                                    }
+                                    setLoading(false);
+                                }
+                            }
+                        }}
+                    />
+                </div>
+            )}
+        </Notice.Warning>
+    );
+}
+
 function EquicordSettings() {
     const settings = useSettings();
     const stealthActive = useStealthActive();
@@ -206,6 +286,13 @@ function EquicordSettings() {
         warning: { enabled: boolean; message?: string; };
     }>
         = [
+            {
+                key: "seeAllCustomProfile",
+                title: "See All Customprofile",
+                description: "Share your custom profile (except username) with others and see their custom profiles.",
+                restartRequired: false,
+                warning: { enabled: false },
+            },
             {
                 key: "useQuickCss",
                 title: "Enable Custom CSS",
@@ -304,6 +391,8 @@ function EquicordSettings() {
                         Settings Plugin
                     </a>.
                 </Notice.Info>
+
+                <CustomProfileAuthSection />
 
                 {Switches.filter((s): s is Exclude<typeof s, false> => !!s).map(
                     s => (
