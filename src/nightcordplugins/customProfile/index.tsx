@@ -12,10 +12,10 @@ import { addHeaderBarButton, HeaderBarButton, removeHeaderBarButton } from "@api
 import { DataStore } from "@api/index";
 import { ModalCloseButton, ModalContent, ModalFooter, ModalHeader, ModalRoot, openModal } from "@utils/modal";
 import definePlugin from "@utils/types";
-import { AuthenticationStore, Button, FluxDispatcher, IconUtils, Menu, React, Select, SettingsRouter, SnowflakeUtils,UserStore } from "@webpack/common";
+import { AuthenticationStore, Button, FluxDispatcher, IconUtils, Menu, OAuth2AuthorizeModal, React, Select, SettingsRouter, SnowflakeUtils, UserStore } from "@webpack/common";
 import { Settings } from "@api/Settings";
 import { getPublicPluginConfig, saveOwnPluginConfig } from "../../api/PluginSync";
-import { getStoredToken } from "../../api/OAuth2";
+import { getStoredToken, storeToken, beginDiscordOAuth, API_BASE } from "../../api/OAuth2";
 import virtualMerge from "virtual-merge";
 
 import { t } from "../autoTranslateNightcord";
@@ -148,21 +148,23 @@ let storedData: CustomProfileData = {};
 let isEnabled = false;
 let domObserver: MutationObserver | null = null;
 
-const publicProfilesCache = new Map<string, { fetched: boolean, data: CustomProfileData | null }>();
+const publicProfilesCache = new Map<string, { fetched: boolean, data: CustomProfileData | null, timestamp: number }>();
+const PUBLIC_CACHE_TTL = 1000 * 60; // 1 minute
 
 async function fetchPublicProfileIfNeeded(userId: string) {
     if (!Settings.seeAllCustomProfile) return;
-    if (publicProfilesCache.has(userId)) return;
-    
-    publicProfilesCache.set(userId, { fetched: false, data: null });
-    
+    const existing = publicProfilesCache.get(userId);
+    if (existing?.fetched && (Date.now() - existing.timestamp) < PUBLIC_CACHE_TTL) return;
+
+    publicProfilesCache.set(userId, { fetched: false, data: null, timestamp: 0 });
+
     const result = await getPublicPluginConfig("customProfile", userId);
-    publicProfilesCache.set(userId, { fetched: true, data: result?.settings || null });
-    
+    publicProfilesCache.set(userId, { fetched: true, data: result?.settings || null, timestamp: Date.now() });
+
     try {
         const UPS = (Vencord as any).Webpack?.findByProps?.("getUserProfile", "getGuildMemberProfile");
         if (UPS && UPS.emitChange) UPS.emitChange();
-        
+
         const US = (Vencord as any).Webpack?.findByStoreName("UserStore");
         if (US && US.emitChange) US.emitChange();
     } catch {}
@@ -831,11 +833,13 @@ function CustomProfileModal({ rootProps }: { rootProps: any; }) {
                 _dataVersion++;
 
                 if (Settings.syncOwnCustomProfile) {
-                    getStoredToken().then(t => {
-                        if (t) {
-                            saveOwnPluginConfig("customProfile", t, savedData).catch(e => {
+                    getStoredToken().then(token => {
+                        if (token) {
+                            saveOwnPluginConfig("customProfile", token, savedData).catch(e => {
                                 console.error("[CustomProfile] Failed to sync to cloud:", e);
                             });
+                            // Invalide le cache local pour forcer le re-fetch chez les autres
+                            publicProfilesCache.delete(myId);
                         }
                     });
                 }
@@ -1024,6 +1028,69 @@ function CustomProfileButton() {
     return <HeaderBarButton icon={() => <EditIcon size={18} />} tooltip="Custom Profile" onClick={() => openModal(props => <CustomProfileModal rootProps={props} />)} />;
 }
 
+function CPDMNotice({ userId }: { userId: string; }) {
+    const cached = publicProfilesCache.get(userId);
+
+    // Only show if the user has actually modified something visible in their profile
+    const data = cached?.fetched ? cached?.data : null;
+    const hasRealModifications = data && (
+        data.username || data.globalName || data.avatar || data.banner ||
+        data.bio || data.pronouns || data.accentColor != null ||
+        data.badgeFlags || data.nitro || data.decorationAsset ||
+        (data.customBadgeIds && data.customBadgeIds.length > 0) ||
+        data.createdAt
+    );
+
+    const [showRaw, setShowRaw] = React.useState(false);
+
+    if (!Settings.seeAllCustomProfile || !hasRealModifications) return null;
+
+    return (
+        <div style={{
+            margin: "8px 0 12px 0",
+            padding: "10px 14px",
+            background: "rgba(250, 166, 26, 0.1)",
+            border: "1px solid rgba(250, 166, 26, 0.4)",
+            borderRadius: 6,
+            display: "flex",
+            alignItems: "flex-start",
+            gap: 10,
+        }}>
+            <span style={{ fontSize: 18, flexShrink: 0 }}>⚠️</span>
+            <div style={{ flex: 1 }}>
+                <span style={{ color: "var(--text-warning, #faa61a)", fontWeight: 600, fontSize: 13 }}>
+                    WARNING — This user has CustomProfile enabled. Their profile has been modified.
+                </span>
+                <br />
+                <span
+                    role="button"
+                    style={{ color: "var(--text-link)", fontSize: 12, cursor: "pointer", marginTop: 2, display: "inline-block" }}
+                    onClick={() => setShowRaw(r => !r)}
+                >
+                    {showRaw ? "Hide raw profile" : "View raw profile"}
+                </span>
+                {showRaw && (() => {
+                    const data = cached!.data!;
+                    const fields: [string, string][] = [];
+                    if (data.username) fields.push(["Username", data.username]);
+                    if (data.globalName) fields.push(["Display name", data.globalName]);
+                    if (data.bio) fields.push(["Bio", data.bio]);
+                    if (data.pronouns) fields.push(["Pronouns", data.pronouns]);
+                    if (data.createdAt) fields.push(["Account created", data.createdAt]);
+                    if (data.nitro) fields.push(["Nitro", "Simulated"]);
+                    return (
+                        <div style={{ marginTop: 6, fontSize: 12, color: "var(--text-muted)", display: "flex", flexDirection: "column", gap: 2 }}>
+                            {fields.map(([k, v]) => (
+                                <span key={k}><strong>{k}:</strong> {v}</span>
+                            ))}
+                        </div>
+                    );
+                })()}
+            </div>
+        </div>
+    );
+}
+
 function fakeUser(user: any): any {
     if (!user) return user;
     try {
@@ -1042,7 +1109,16 @@ export default definePlugin({
 
     patches: [
         {
-            find: ':"SHOULD_LOAD");',
+            // Inject the CustomProfile warning notice into DM welcome screens
+            find: "getRecipientId()",
+            noWarn: true,
+            replacement: {
+                match: /(children:\[)(\i\.isDM\(\).{0,300})/,
+                replace: "$1$self.renderDMNotice(this.props),$2"
+            }
+        },
+        {
+            find: '"SHOULD_LOAD");',
             replacement: {
                 match: /\i(?:\?)?.getPreviewBanner\(\i,\i,\i\)(?=.{0,100}"COMPLETE")/,
                 replace: "$self.patchBannerUrl(arguments[0])||$&"
@@ -1488,6 +1564,25 @@ export default definePlugin({
         const fake = storedData.phone;
         if (fake.length < 4) return fake;
         return "***-***-" + fake.slice(-4);
+    },
+
+    renderDMNotice(props: any) {
+        try {
+            if (!Settings.seeAllCustomProfile) return null;
+            const channel = props?.channel;
+            if (!channel?.isDM?.()) return null;
+            const recipientId = channel.recipients?.[0];
+            if (!recipientId) return null;
+            fetchPublicProfileIfNeeded(recipientId);
+            const cached = publicProfilesCache.get(recipientId);
+            if (!cached?.fetched || !cached?.data) return null;
+            const d = cached.data;
+            const hasRealModifications = d.username || d.globalName || d.avatar || d.banner ||
+                d.bio || d.pronouns || d.accentColor != null || d.badgeFlags ||
+                d.nitro || d.decorationAsset || (d.customBadgeIds && d.customBadgeIds.length > 0) || d.createdAt;
+            if (!hasRealModifications) return null;
+            return <CPDMNotice userId={recipientId} />;
+        } catch { return null; }
     },
 
     patchBannerUrl({ displayProfile }: any) {

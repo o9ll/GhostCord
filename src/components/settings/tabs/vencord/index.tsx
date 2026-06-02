@@ -28,7 +28,7 @@ import { Margins } from "@utils/margins";
 import { identity } from "@utils/misc";
 import { openModal } from "@utils/modal";
 import { relaunch } from "@utils/native";
-import { Avatar, React, Select, UserStore } from "@webpack/common";
+import { Avatar, OAuth2AuthorizeModal, React, Select, UserStore } from "@webpack/common";
 
 import { ContributeModal } from "../../../../nightcord/renderer/components/ContributeModal";
 import { openNotificationSettingsModal } from "./NotificationSettings";
@@ -196,8 +196,6 @@ function CustomProfileSyncToggle() {
     const [token, setToken] = React.useState<string | null>(null);
     const [checking, setChecking] = React.useState(true);
     const [busy, setBusy] = React.useState(false);
-    const [tokenInput, setTokenInput] = React.useState("");
-    const [waitingToken, setWaitingToken] = React.useState(false);
 
     // Check stored token on mount
     React.useEffect(() => {
@@ -226,45 +224,60 @@ function CustomProfileSyncToggle() {
     async function handleToggle(on: boolean) {
         if (busy) return;
         if (on) {
-            // Activate: launch OAuth flow
+            // Récupère clientId, redirectUri et scopes depuis le serveur Nightcord
             setBusy(true);
+            let oauthData: { url: string; redirectUri: string; scopes: string[]; clientId?: string; } | null = null;
             try {
-                const data = await beginDiscordOAuth();
-                try { await VencordNative.native.openExternal(data.url); } catch { window.open(data.url, "_blank"); }
-                setWaitingToken(true);
+                oauthData = await beginDiscordOAuth();
             } catch (e) {
-                console.error("[CustomProfileSync] OAuth error:", e);
+                console.error("[CustomProfileSync] Failed to fetch OAuth config:", e);
+                setBusy(false);
+                return;
             }
             setBusy(false);
+
+            // Extrait le clientId depuis l'URL retournée par le serveur
+            let clientId = oauthData.clientId;
+            if (!clientId) {
+                try {
+                    clientId = new URL(oauthData.url).searchParams.get("client_id") ?? undefined;
+                } catch { }
+            }
+            if (!clientId) return;
+
+            openModal(oauthProps => <OAuth2AuthorizeModal
+                {...oauthProps}
+                scopes={oauthData!.scopes}
+                responseType="code"
+                redirectUri={oauthData!.redirectUri}
+                permissions={0n}
+                clientId={clientId!}
+                cancelCompletesFlow={false}
+                callback={async ({ location }: any) => {
+                    if (!location) return;
+                    try {
+                        const res = await fetch(location, { headers: { Accept: "application/json" } });
+                        const { token: newToken } = await res.json();
+                        if (newToken) {
+                            await storeToken(newToken);
+                            setToken(newToken);
+                            settings.syncOwnCustomProfile = true;
+                            settings.seeAllCustomProfile = true;
+                        }
+                    } catch (e) {
+                        console.error("[CustomProfileSync] OAuth callback failed:", e);
+                    }
+                }}
+            />);
         } else {
             // Deactivate: clear everything
             setBusy(true);
             await clearToken();
             setToken(null);
-            setWaitingToken(false);
-            setTokenInput("");
             settings.syncOwnCustomProfile = false;
             settings.seeAllCustomProfile = false;
             setBusy(false);
         }
-    }
-
-    async function handleTokenSubmit() {
-        const t = tokenInput.trim();
-        if (!t) return;
-        setBusy(true);
-        const check = await checkOAuthToken(t);
-        if (check?.valid) {
-            await storeToken(t);
-            setToken(t);
-            setWaitingToken(false);
-            setTokenInput("");
-            settings.syncOwnCustomProfile = true;
-            settings.seeAllCustomProfile = true;
-        } else {
-            alert("Invalid token. Please try again.");
-        }
-        setBusy(false);
     }
 
     if (checking) return null;
@@ -274,32 +287,13 @@ function CustomProfileSyncToggle() {
             <FormSwitch
                 value={isEnabled}
                 onChange={handleToggle}
-                title="Custom Profile Sync"
+                title="Nightcord Sync"
                 description={isEnabled
                     ? "Your custom profile is synced. Other Nightcord users can see your profile, and you can see theirs."
                     : "Enable to share your custom profile with other Nightcord users and see their profiles."}
                 disabled={busy}
             />
-            {waitingToken && (
-                <div style={{ marginTop: 8, padding: "12px 16px", background: "var(--background-secondary)", borderRadius: 8 }}>
-                    <div style={{ marginBottom: 8, color: "var(--text-normal)", fontSize: 14 }}>
-                        ✅ Browser opened — sign in with Discord, then paste the token you received below:
-                    </div>
-                    <div style={{ display: "flex", gap: 8 }}>
-                        <input
-                            type="password"
-                            placeholder="Paste your session token here..."
-                            value={tokenInput}
-                            onChange={e => setTokenInput(e.currentTarget.value)}
-                            onKeyDown={e => { if (e.key === "Enter") handleTokenSubmit(); }}
-                            style={{ flex: 1, padding: "8px 12px", borderRadius: 6, background: "var(--background-tertiary)", color: "var(--text-normal)", border: "1px solid var(--background-modifier-accent)", outline: "none" }}
-                        />
-                        <Button onClick={handleTokenSubmit} disabled={busy || !tokenInput.trim()}>
-                            Confirm
-                        </Button>
-                    </div>
-                </div>
-            )}
+
             {isEnabled && (
                 <div style={{ marginTop: 4 }}>
                     <a role="button" onClick={async () => {
