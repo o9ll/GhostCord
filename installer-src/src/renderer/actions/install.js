@@ -327,8 +327,26 @@ async function injectShims(paths) {
             }
 
             if (await safeExists(appAsar)) {
-                if (await safeExists(backup)) await safeDelete(backup);
-                await fs.rename(appAsar, backup); // Rename is atomic!
+                let renameSuccess = false;
+                let lastErr = null;
+                for (let i = 0; i < 5; i++) {
+                    try {
+                        if (await safeExists(backup)) await safeDelete(backup);
+                        await fs.rename(appAsar, backup); // Rename is atomic!
+                        renameSuccess = true;
+                        break;
+                    } catch (err) {
+                        lastErr = err;
+                        if (err.code === "EBUSY" || err.code === "EPERM") {
+                            await new Promise(r => setTimeout(r, 1000));
+                        } else {
+                            throw err;
+                        }
+                    }
+                }
+                if (!renameSuccess) {
+                    throw new Error(`Critical error: Could not rename app.asar after 5 retries. File is locked. Please close Discord manually via Task Manager and try again. Detailed error: ${lastErr.message}`);
+                }
             }
 
             log("3. Creating app directory...");

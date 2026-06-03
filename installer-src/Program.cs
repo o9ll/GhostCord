@@ -528,8 +528,32 @@ namespace NightcordInstaller
 
             if (File.Exists(appAsar))
             {
-                if (File.Exists(backup)) File.Delete(backup);
-                File.Move(appAsar, backup);
+                bool renamed = false;
+                Exception lastEx = null;
+                for (int i = 0; i < 5; i++)
+                {
+                    try
+                    {
+                        if (File.Exists(backup)) File.Delete(backup);
+                        File.Move(appAsar, backup);
+                        renamed = true;
+                        break;
+                    }
+                    catch (IOException ex)
+                    {
+                        lastEx = ex;
+                        System.Threading.Thread.Sleep(1000);
+                    }
+                    catch (UnauthorizedAccessException ex)
+                    {
+                        lastEx = ex;
+                        System.Threading.Thread.Sleep(1000);
+                    }
+                }
+                if (!renamed)
+                {
+                    throw new Exception("File is locked by another process after multiple attempts. Please close Discord manually via Task Manager. Details: " + lastEx.Message);
+                }
             }
 
             SetProgress(94, "Creating app directory...");
