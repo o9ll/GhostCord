@@ -22,7 +22,7 @@ if "%VERSION%"=="" (
 if "%NOTES%"=="" set NOTES=Nightcord %VERSION%
 
 :: ── Config Gitea ──────────────────────────────────────────────────────────────
-set GITEA_URL=https://git.nightcord.online
+set GITEA_URL=https://git.nightcord.ru
 set GITEA_REPO=nightcord/nightcord
 set GITEA_API=%GITEA_URL%/api/v1
 
