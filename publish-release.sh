@@ -90,7 +90,6 @@ echo ""
 echo " [3/8] Build + obfuscation en cours..."
 
 pkill -f "Discord" 2>/dev/null || true
-pkill -f "node"    2>/dev/null || true
 sleep 2
 
 if ! pnpm build; then
