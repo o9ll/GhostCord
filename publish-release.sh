@@ -198,11 +198,19 @@ fi
 echo ""
 echo " [8/8] Creation de la release v$VERSION sur Gitea..."
 
-# 8a. Créer la release via API Gitea
-RELEASE_RESPONSE=$(curl -s -X POST "$GITEA_API/repos/$GITEA_REPO/releases" \
-    -H "Authorization: token $GITEA_TOKEN" \
-    -H "Content-Type: application/json" \
-    -d "{
+EXISTING_RELEASE_RESPONSE=$(curl -s "$GITEA_API/repos/$GITEA_REPO/releases/tags/$TAG_NAME" \
+    -H "Authorization: token $GITEA_TOKEN")
+
+RELEASE_ID=$(printf '%s' "$EXISTING_RELEASE_RESPONSE" | node -e "let d=''; process.stdin.on('data', c => d += c); process.stdin.on('end', () => { try { const parsed = JSON.parse(d); if (parsed && parsed.id != null) console.log(parsed.id); } catch (e) { process.exit(1); } });")
+
+if [[ -n "$RELEASE_ID" ]]; then
+    echo " Release Gitea deja presente (ID: $RELEASE_ID)"
+else
+    # 8a. Créer la release via API Gitea
+    RELEASE_RESPONSE=$(curl -s -X POST "$GITEA_API/repos/$GITEA_REPO/releases" \
+        -H "Authorization: token $GITEA_TOKEN" \
+        -H "Content-Type: application/json" \
+        -d "{
   \"tag_name\": \"$TAG_NAME\",
   \"target_commitish\": \"master\",
   \"name\": \"Nightcord v$VERSION\",
@@ -211,16 +219,17 @@ RELEASE_RESPONSE=$(curl -s -X POST "$GITEA_API/repos/$GITEA_REPO/releases" \
   \"prerelease\": false
 }")
 
-# 8b. Extraire l'ID de la release
-RELEASE_ID=$(printf '%s' "$RELEASE_RESPONSE" | node -e "let d=''; process.stdin.on('data', c => d += c); process.stdin.on('end', () => { try { const parsed = JSON.parse(d); if (parsed && parsed.id != null) console.log(parsed.id); } catch (e) { process.exit(1); } });")
+    # 8b. Extraire l'ID de la release
+    RELEASE_ID=$(printf '%s' "$RELEASE_RESPONSE" | node -e "let d=''; process.stdin.on('data', c => d += c); process.stdin.on('end', () => { try { const parsed = JSON.parse(d); if (parsed && parsed.id != null) console.log(parsed.id); } catch (e) { process.exit(1); } });")
 
-if [[ -z "$RELEASE_ID" ]]; then
-    echo " [ERREUR] Impossible de recuperer l'ID de la release Gitea."
-    echo "$RELEASE_RESPONSE"
-    exit 1
+    if [[ -z "$RELEASE_ID" ]]; then
+        echo " [ERREUR] Impossible de recuperer l'ID de la release Gitea."
+        echo "$RELEASE_RESPONSE"
+        exit 1
+    fi
+
+    echo " Release Gitea creee (ID: $RELEASE_ID)"
 fi
-
-echo " Release Gitea creee (ID: $RELEASE_ID)"
 
 # Helper upload
 upload_asset() {
