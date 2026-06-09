@@ -34,23 +34,6 @@ interface PluginCardProps extends React.HTMLProps<HTMLDivElement> {
     onMouseLeave?: React.MouseEventHandler<HTMLDivElement>;
 }
 
-/**
- * Populate TUTORIAL_CACHE from the static list and call onProgress immediately.
- * No network requests — avoids CORS issues when fetching from git.nightcord.online.
- */
-export function loadTutorials(pluginNames: string[], onProgress: (found: Set<string>) => void) {
-    const found = new Set<string>();
-
-    for (const name of pluginNames) {
-        const has = TUTORIAL_PLUGIN_NAMES.has(name);
-        TUTORIAL_CACHE.set(name, has);
-        if (has) found.add(name);
-    }
-
-    onProgress(found);
-}
-
-
 export function PluginCard({ plugin, disabled, onRestartNeeded, onMouseEnter, onMouseLeave, isNew, hasTutorial }: PluginCardProps) {
     const settings = Settings.plugins[plugin.name];
     const isEnabled = () => isPluginEnabled(plugin.name);

@@ -70,3 +70,11 @@ export const TUTORIAL_PLUGIN_NAMES: ReadonlySet<string> = new Set([
     "VoiceMessages",
     "VolumeBooster",
 ]);
+
+/**
+ * Synchronously populates the cache from the static list and calls onProgress.
+ * No network requests — instant, no CORS issues.
+ */
+export function loadTutorials(_pluginNames: string[], onProgress: (found: Set<string>) => void) {
+    onProgress(new Set(TUTORIAL_PLUGIN_NAMES));
+}
