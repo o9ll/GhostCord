@@ -1,4 +1,4 @@
-﻿<script>
+<script>
     import {remote} from "electron";
     import quit from "../actions/quit";
     import {onMount} from "svelte";
@@ -128,17 +128,6 @@
         <div class="modal-header">
             <span class="modal-title">Nightcord Options</span>
             <button class="modal-close" on:click={() => showSettings = false}>&#x2715;</button>
-        </div>
-
-        <div class="toggle-row">
-            <div class="toggle-info">
-                <div class="toggle-label">Default config</div>
-                <div class="toggle-desc">Enable default plugins after installation.</div>
-            </div>
-            <label class="switch">
-                <input type="checkbox" bind:checked={prefDefaultPlugins}>
-                <span class="track"></span>
-            </label>
         </div>
 
         <div class="toggle-row">

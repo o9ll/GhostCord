@@ -28,6 +28,33 @@ import { IS_VANILLA } from "./utils/constants";
 
 console.log("[Nightcord] Starting up...");
 
+// Caching for _resolveLookupPaths to avoid extreme slowdowns during Discord's heavy module loading
+const Module = require("module");
+if (Module._resolveLookupPaths) {
+    const originalResolveLookupPaths = Module._resolveLookupPaths;
+    const lookupCache = new Map();
+    // Cache for 10 seconds to avoid extreme lag when many modules load at startup
+    const CACHE_TTL = 10000;
+
+    Module._resolveLookupPaths = function(request: string, parent: any, newReturn: boolean) {
+        const cacheKey = request + (parent ? '|' + parent.id : '');
+        const cached = lookupCache.get(cacheKey);
+        
+        if (cached && Date.now() - cached.time < CACHE_TTL) {
+            return cached.paths;
+        }
+
+        const result = originalResolveLookupPaths.call(this, request, parent, newReturn);
+        
+        lookupCache.set(cacheKey, {
+            time: Date.now(),
+            paths: result
+        });
+        
+        return result;
+    };
+}
+
 // Our injector file at app/index.js
 const injectorPath = require.main!.filename;
 
@@ -306,8 +333,9 @@ if (!IS_VANILLA) {
     }
 
     const originalAppend = app.commandLine.appendSwitch;
-    const _ncDisabledFeatures = new Set(["WidgetLayering", "UseEcoQoSForBackgroundProcess"]);
+    const _ncDisabledFeatures = new Set(["WidgetLayering", "UseEcoQoSForBackgroundProcess", "CalculateNativeWinOcclusion"]);
     app.commandLine.appendSwitch = function (...args) {
+        if (args[0] === "process-per-site") return;
         if (args[0] === "disable-features") {
             (args[1] ?? "").split(",").filter(Boolean).forEach((f: string) => _ncDisabledFeatures.add(f));
             args[1] = [..._ncDisabledFeatures].join(",");

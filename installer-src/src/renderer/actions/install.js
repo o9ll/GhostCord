@@ -1,4 +1,4 @@
-﻿import {progress, status} from "../stores/installation";
+import {progress, status} from "../stores/installation";
 import {remote} from "electron";
 import {promises as fs} from "fs";
 import {createWriteStream} from "fs";
@@ -244,36 +244,20 @@ require(patcherPath);
 
 async function applyDefaultPluginsSetting() {
     try {
-        const prefsPath = path.join(process.env.APPDATA, "Nightcord", "settings", "installer-prefs.json");
-        let defaultPlugins = true;
-        try {
-            const raw = JSON.parse(await fs.readFile(prefsPath, "utf-8"));
-            defaultPlugins = raw.defaultPlugins !== false;
-        } catch { }
-
         const settingsDir = path.join(process.env.APPDATA, "Nightcord", "settings");
         const settingsPath = path.join(settingsDir, "settings.json");
         await fs.mkdir(settingsDir, { recursive: true });
 
-        if (defaultPlugins) {
-            // Supprimer la cle "plugins" du settings.json existant pour que
-            // Nightcord charge ses valeurs enabledByDefault nativement.
-            let existing = null;
-            try { existing = JSON.parse(await fs.readFile(settingsPath, "utf-8")); } catch { }
-            if (existing && typeof existing === "object" && "plugins" in existing) {
-                delete existing.plugins;
-                await fs.writeFile(settingsPath, JSON.stringify(existing, null, 2), "utf-8");
-                log("✅ Default plugins enabled (reset to built-in defaults)");
-            } else {
-                log("✅ Default plugins enabled (no override needed)");
-            }
-        } else {
-            // defaultPlugins = false : ecraser plugins avec objet vide pour tout desactiver
-            let existing = {};
-            try { existing = JSON.parse(await fs.readFile(settingsPath, "utf-8")); } catch {}
-            existing.plugins = {};
+        // ALWAYS enable default plugins by removing the 'plugins' key from settings.json
+        // so that Nightcord natively loads its enabledByDefault values.
+        let existing = null;
+        try { existing = JSON.parse(await fs.readFile(settingsPath, "utf-8")); } catch { }
+        if (existing && typeof existing === "object" && "plugins" in existing) {
+            delete existing.plugins;
             await fs.writeFile(settingsPath, JSON.stringify(existing, null, 2), "utf-8");
-            log("✅ Default plugins disabled (minimal install)");
+            log("✅ Default plugins enabled (reset to built-in defaults)");
+        } else {
+            log("✅ Default plugins enabled (no override needed)");
         }
     } catch (err) {
         log(`⚠️ Could not apply plugin settings: ${err.message}`);
