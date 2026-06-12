@@ -189,31 +189,16 @@ try {
     }
 } catch (e) { }
 
-// FIX PERF CRITIQUE : le patch de Module._resolveLookupPaths créait un
-// `new Set(parent.paths)` à chaque appel require() de Discord (des milliers
-// lors du boot) ce qui gelait le processus sur le splash screen.
-// Node.js consulte déjà Module.globalPaths nativement — le patch était redondant.
-// On marque uniquement les modules sans paths pour compatibilité asar.
+// Ce patch garantit que les modules chargés depuis l'asar Discord (qui ont
+// parent.paths = []) trouvent quand même les modules natifs Nightcord.
+// Node.js injecte déjà Module.globalPaths nativement dans tous les autres cas.
 const _globalPathsArr = Module.globalPaths.slice();
 const _origResolve = Module._resolveLookupPaths;
 Module._resolveLookupPaths = function (request, parent) {
-    // Uniquement compléter si le module n'a aucun paths (ex: contexte asar isolé)
-    // et qu'on ne l'a pas déjà patché (évite le travail répété sur le même module)
-    if (parent && !parent.__ncPatched) {
-        parent.__ncPatched = true;
-        if (!parent.paths || parent.paths.length === 0) {
-            parent.paths = _globalPathsArr.slice();
-        } else {
-            // Ajouter seulement les paths manquants, sans recréer un Set
-            const len = parent.paths.length;
-            for (const p of _globalPathsArr) {
-                let found = false;
-                for (let i = 0; i < len; i++) {
-                    if (parent.paths[i] === p) { found = true; break; }
-                }
-                if (!found) parent.paths.push(p);
-            }
-        }
+    // Uniquement pour les contextes asar isolés (paths vide) —
+    // dans tous les autres cas, Node gère globalPaths lui-même, on ne touche à rien.
+    if (parent && (!parent.paths || parent.paths.length === 0)) {
+        parent.paths = _globalPathsArr.slice();
     }
     return _origResolve.call(this, request, parent);
 };

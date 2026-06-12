@@ -28,31 +28,6 @@ import { IS_VANILLA } from "./utils/constants";
 
 console.log("[Nightcord] Starting up...");
 
-// FIX PERF CRITIQUE : le patch de Module._resolveLookupPaths par défaut 
-// crée un `new Set(parent.paths)` à chaque appel require() (des milliers 
-// lors du boot) ce qui gèle le processus sur le splash screen ("Starting...").
-const Module = require("module");
-if (Module._resolveLookupPaths) {
-    const _origResolve = Module._resolveLookupPaths;
-    const fastResolve = function (request: string, parent: any) {
-        if (!parent || !parent.paths) return _origResolve.call(Module, request, parent);
-        for (let i = 0; i < Module.globalPaths.length; i++) {
-            if (!parent.paths.includes(Module.globalPaths[i])) {
-                parent.paths.push(Module.globalPaths[i]);
-            }
-        }
-        return _origResolve.call(Module, request, parent);
-    };
-
-    // Protéger notre patch ultra-rapide pour éviter que Discord ne l'écrase
-    // avec sa version lente plus tard dans le chargement
-    Object.defineProperty(Module, "_resolveLookupPaths", {
-        get: () => fastResolve,
-        set: () => { /* Silencieusement ignorer les tentatives d'écrasement */ },
-        configurable: true
-    });
-}
-
 
 // Our injector file at app/index.js
 const injectorPath = require.main!.filename;
