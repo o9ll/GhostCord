@@ -151,14 +151,16 @@ function GifConvertorPopover({ position, onClose }: PopoverProps) {
             if (!items) return;
             for (const item of items) {
                 if (item.kind === "file" && (item.type.startsWith("image/") || item.type.startsWith("video/"))) {
+                    e.preventDefault();
+                    e.stopPropagation();
                     const file = item.getAsFile();
                     if (file) processFile(file);
                     break;
                 }
             }
         };
-        document.addEventListener("paste", onPaste);
-        return () => document.removeEventListener("paste", onPaste);
+        document.addEventListener("paste", onPaste, { capture: true });
+        return () => document.removeEventListener("paste", onPaste, { capture: true });
     }, []);
 
     async function processFile(file: File) {
