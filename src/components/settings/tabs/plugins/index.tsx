@@ -182,6 +182,23 @@ export default function PluginSettings({ premiumOnly = false }: PluginSettingsPr
     const settings = useSettings();
     const changes = React.useMemo(() => new ChangeList<string>(), []);
 
+    // Expand Discord's content column to fill the full available width
+    React.useEffect(() => {
+        const col = document.querySelector<HTMLElement>('[class*="contentColumn"]');
+        if (!col) return;
+        const prevPaddingLeft = col.style.paddingLeft;
+        const prevPaddingRight = col.style.paddingRight;
+        const prevMaxWidth = col.style.maxWidth;
+        col.style.paddingLeft = "16px";
+        col.style.paddingRight = "16px";
+        col.style.maxWidth = "none";
+        return () => {
+            col.style.paddingLeft = prevPaddingLeft;
+            col.style.paddingRight = prevPaddingRight;
+            col.style.maxWidth = prevMaxWidth;
+        };
+    }, []);
+
     // Static list — no fetch, no CORS issues.
     // Also populate TUTORIAL_CACHE so the SearchStatus.TUTORIAL filter works.
     const tutorialPlugins = useMemo(() => {
@@ -582,53 +599,92 @@ export default function PluginSettings({ premiumOnly = false }: PluginSettingsPr
     const othersVisible = othersVisibleData.map(makeCard);
     const requiredPlugins = requiredData.map(makeRequiredCard);
 
+    const totalNightcordPlugins = React.useMemo(() => {
+        return Object.values(Plugins).filter(p => PluginMeta[p.name]?.folderName?.startsWith("src/nightcordplugins/")).length;
+    }, []);
+
+    const percent = totalStockPlugins + totalUserPlugins > 0 ? Math.round((enabledPlugins.length / (totalStockPlugins + totalUserPlugins)) * 100) : 0;
+    const strokeDashoffset = 62.83 - (62.83 * percent / 100);
+
     return (
         <SettingsTab>
-            {!premiumOnly && <ReloadRequiredCard required={changes.hasChanges} enabledPlugins={enabledPlugins} openWarningModal={openWarningModal} resetCheckAndDo={resetCheckAndDo} applyDefaultConfigCheckAndDo={applyDefaultConfigCheckAndDo} />}
+            <div className="vc-plugins-full-width-container">
+                {!premiumOnly && (
+                    <div className={cl("ecosystem-banner")}>
+                        <div className={cl("ecosystem-banner-text")}>
+                            <HeadingTertiary>Plugin Ecosystem Management</HeadingTertiary>
+                            <Paragraph>Manage your Nightcord and community plugins here. Enable, disable, and configure them to your liking.</Paragraph>
+                        </div>
+                        <div className={cl("ecosystem-banner-buttons")}>
+                            <Button
+                                variant="danger"
+                                size="small"
+                                onClick={() => openWarningModal(null, undefined, false, enabledPlugins.length, resetCheckAndDo)}
+                            >
+                                DISABLE ALL PLUGINS
+                            </Button>
+                            <Button
+                                variant="danger"
+                                size="small"
+                                onClick={() => openResetDefaultsModal(applyDefaultConfigCheckAndDo)}
+                            >
+                                APPLY DEFAULT CONFIG
+                            </Button>
+                        </div>
+                    </div>
+                )}
 
-            {!premiumOnly && (
-                <div className={cl("stats-container")} style={{ display: "grid", gridTemplateColumns: "1fr" }}>
-                    <StockPluginsCard
-                        totalStockPlugins={totalStockPlugins}
-                        enabledStockPlugins={enabledStockPlugins}
-                    />
-                </div>
-            )}
+                {!premiumOnly && (
+                    <div className={cl("stats-banner")}>
+                        <div className={cl("stat-item")}>
+                            <div className={cl("stat-title")}>TOTAL PLUGINS</div>
+                            <div className={cl("stat-value")}>{totalStockPlugins + totalUserPlugins}</div>
+                        </div>
+                        <div className={cl("stat-item")}>
+                            <div className={cl("stat-title")}>ENABLED PLUGINS</div>
+                            <div className={cl("stat-value")}>
+                                {enabledPlugins.length} <span className={cl("stat-percent")}>({percent}%)</span>
+                                <div className={cl("stat-chart")}>
+                                    <svg width="24" height="24" viewBox="0 0 24 24" style={{ transform: "rotate(-90deg)" }}>
+                                        <circle cx="12" cy="12" r="10" fill="transparent" stroke="var(--background-modifier-active)" strokeWidth="4" />
+                                        <circle cx="12" cy="12" r="10" fill="transparent" stroke="var(--text-link)" strokeWidth="4" strokeDasharray="62.83" strokeDashoffset={strokeDashoffset} style={{ transition: "stroke-dashoffset 0.5s ease" }} />
+                                    </svg>
+                                </div>
+                            </div>
+                        </div>
+                        <div className={cl("stat-item")}>
+                            <div className={cl("stat-title")}>NIGHTCORD PLUGINS</div>
+                            <div className={cl("stat-value")}>{totalNightcordPlugins}</div>
+                        </div>
+                    </div>
+                )}
 
-            {!premiumOnly && (
-                <div className={cl("ui-elements")}>
-                    <UIElementsButton />
-                </div>
-            )}
-
-            <HeadingTertiary className={classes(Margins.top20, Margins.bottom8)}>
-                Filters
-            </HeadingTertiary>
-
-            <div className={classes(Margins.bottom20, cl("filter-controls"))}>
-                <ErrorBoundary noop>
-                    <TextInput autoFocus value={searchInput} placeholder="Search for a plugin..." onChange={onSearch} />
-                </ErrorBoundary>
-                <div>
+                <div className={classes(Margins.bottom20, cl("filter-controls"))}>
                     <ErrorBoundary noop>
-                        <Select
-                            options={[
-                                { label: "Show All", value: SearchStatus.ALL, default: true },
-                                { label: "Show Enabled", value: SearchStatus.ENABLED },
-                                { label: "Show Disabled", value: SearchStatus.DISABLED },
-                                { label: "Show Nightcord Plugins", value: SearchStatus.NIGHTCORD },
-                                { label: "Show Others Plugins", value: SearchStatus.OTHERS },
-                                { label: "Show New", value: SearchStatus.NEW },
-                                hasUserPlugins && { label: "Show UserPlugins", value: SearchStatus.USER_PLUGINS },
-                            ].filter(isTruthy)}
-                            serialize={v => String(v)}
-                            select={status => onStatusChange(Number(status) as SearchStatus)}
-                            isSelected={v => Number(v) === searchValue.status}
-                            closeOnSelect={true}
-                        />
+                        <TextInput autoFocus value={searchInput} placeholder="Find a plugin, tag, or author..." onChange={onSearch} />
                     </ErrorBoundary>
+                    <div className={cl("filter-buttons")}>
+                        <button
+                            className={cl("filter-btn", searchValue.status === SearchStatus.OTHERS && "active")}
+                            onClick={() => onStatusChange(SearchStatus.OTHERS)}
+                        >
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style={{marginRight: 6}}><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg> OTHERS
+                        </button>
+                        <button
+                            className={cl("filter-btn", searchValue.status === SearchStatus.NIGHTCORD && "active")}
+                            onClick={() => onStatusChange(SearchStatus.NIGHTCORD)}
+                        >
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style={{marginRight: 6}}><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg> NIGHTCORD
+                        </button>
+                        <button
+                            className={cl("filter-btn")}
+                            disabled={true}
+                            style={{ opacity: 0.5, cursor: "not-allowed" }}
+                        >
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style={{marginRight: 6}}><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg> COMMUNITY
+                        </button>
+                    </div>
                 </div>
-            </div>
 
             {premiumOnly ? (
                 <>
@@ -647,23 +703,23 @@ export default function PluginSettings({ premiumOnly = false }: PluginSettingsPr
                 </>
             ) : (
                 <>
-                    {nightcordData.length > 0 && (
-                        <>
-                            <HeadingTertiary className={Margins.top20}>Nightcord Plugins</HeadingTertiary>
-                            <div className={cl("grid")}>
-                                {nightcordPlugins}
-                            </div>
-                        </>
+                    {nightcordData.length > 0 && searchValue.status === SearchStatus.NIGHTCORD && (
+                        <div className={cl("grid")}>
+                            {nightcordPlugins}
+                        </div>
                     )}
 
-                    {othersData.length > 0 && (
-                        <>
-                            <Divider className={Margins.top20} />
-                            <HeadingTertiary className={classes(Margins.top20, Margins.bottom8)}>Others Plugins</HeadingTertiary>
-                            <div className={cl("grid")}>
-                                {othersVisible}
-                            </div>
-                        </>
+                    {othersData.length > 0 && searchValue.status === SearchStatus.OTHERS && (
+                        <div className={cl("grid")}>
+                            {othersVisible}
+                        </div>
+                    )}
+
+                    {(searchValue.status !== SearchStatus.NIGHTCORD && searchValue.status !== SearchStatus.OTHERS) && (
+                        <div className={cl("grid")}>
+                            {nightcordPlugins}
+                            {othersVisible}
+                        </div>
                     )}
 
                     {nightcordData.length === 0 && othersData.length === 0 && (
@@ -682,7 +738,7 @@ export default function PluginSettings({ premiumOnly = false }: PluginSettingsPr
                 </>
             )}
 
-            {!premiumOnly && (
+            {!premiumOnly && requiredPlugins.length > 0 && (
                 <>
                     <Divider className={Margins.top20} />
 
@@ -697,7 +753,8 @@ export default function PluginSettings({ premiumOnly = false }: PluginSettingsPr
                     </div>
                 </>
             )}
-        </SettingsTab >
+            </div>
+        </SettingsTab>
     );
 }
 

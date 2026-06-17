@@ -3,7 +3,7 @@
 .pm-tooltip {
     position: fixed;
     z-index: 9999;
-    pointer-events: none;
+    pointer-events: auto;
     animation: pm-appear 0.12s ease;
 }
 
@@ -109,4 +109,28 @@
     color: var(--text-muted, #a3a6aa);
     text-align: center;
     padding: 4px 0;
+}
+
+.pm-reply {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--background-modifier-accent, rgba(255,255,255,0.07));
+}
+
+.pm-reply-input {
+    width: 100%;
+    background: var(--channeltextarea-background, #383a40);
+    border: none;
+    border-radius: 8px;
+    padding: 8px 12px;
+    color: var(--text-normal, #dcddde);
+    font-size: 13px;
+    outline: none;
+    box-sizing: border-box;
+    transition: background 0.15s ease;
+}
+
+.pm-reply-input:focus {
+    background: var(--background-tertiary, #202225);
+    box-shadow: inset 0 0 0 1px var(--brand-experiment, #5865F2);
 }

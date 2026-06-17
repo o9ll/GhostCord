@@ -69,7 +69,7 @@ async function messageDeleteHandler(payload: MessageDeletePayload & { isBulk: bo
         if (message == null) {
             // most likely an edited message
             const cachedMessage = cacheSentMessages.get(`${payload.channelId},${payload.id}`);
-            if (!cachedMessage) return; // Flogger.log("no message to save");
+            if (!cachedMessage) return;
 
             message = { ...cacheSentMessages.get(`${payload.channelId},${payload.id}`), deleted: true } as LoggedMessageJSON;
         }
@@ -110,7 +110,6 @@ async function messageDeleteHandler(payload: MessageDeletePayload & { isBulk: bo
 }
 
 async function messageDeleteBulkHandler({ channelId, guildId, ids }: MessageDeleteBulkPayload) {
-    // is this bad? idk man
     const messages = [] as LoggedMessageJSON[];
     for (const id of ids) {
         const msg = await messageDeleteHandler({ type: "MESSAGE_DELETE", channelId, guildId, id, isBulk: true });
@@ -157,7 +156,6 @@ async function messageUpdateHandler(payload: MessageUpdatePayload) {
     let message = oldGetMessage?.(payload.message.channel_id, payload.message.id) as LoggedMessage | LoggedMessageJSON | null;
 
     if (message == null) {
-        // MESSAGE_UPDATE gets dispatched when emebeds change too and content becomes null
         if (cachedMessage != null && payload.message.content != null && cachedMessage.content !== payload.message.content) {
             message = {
                 ...cachedMessage,
@@ -182,7 +180,6 @@ async function messageUpdateHandler(payload: MessageUpdatePayload) {
 }
 
 function messageCreateHandler(payload: MessageCreatePayload) {
-    // we do this here because cache is limited and to save memory
     if (!settings.store.cacheMessagesFromServers && payload.guildId != null) {
         const ids = [payload.channelId, payload.message?.author?.id, payload.guildId];
         const isWhitelisted =
@@ -190,7 +187,7 @@ function messageCreateHandler(payload: MessageCreatePayload) {
                 .split(",")
                 .some(e => ids.includes(e));
         if (!isWhitelisted) {
-            return; // dont cache messages from servers when cacheMessagesFromServers is disabled and not whitelisted.
+            return;
         }
     }
 
@@ -257,6 +254,14 @@ async function processMessageFetch(response: FetchMessagesResponse) {
     }
 }
 
+// Guard: vérifie qu'un élément est bien un objet Message complet.
+// Discord peut inclure des snowflakes bruts (strings/numbers) dans payload.messages
+// pour représenter des messages en lazy-loading non encore chargés.
+// Faire `'flags' in primitive` provoque un TypeError immédiat dans _handleLoadMessagesSuccess.
+function isMessageObject(m: unknown): m is LoggedMessageJSON {
+    return m !== null && typeof m === "object" && typeof (m as any).id === "string";
+}
+
 export default definePlugin({
     name: "MessageLoggerEnhanced",
     enabledByDefault: true,
@@ -295,7 +300,7 @@ export default definePlugin({
                 replace: "childrenAccessories:arguments[0].childrenAccessories || null,$&"
             }
         },
-        // fix vidoes failing because there are no thumbnails
+        // fix videos failing because there are no thumbnails
         {
             find: ".handleImageLoad)",
             replacement: {
@@ -358,8 +363,20 @@ export default definePlugin({
             Flogger.error("Failed to re-add deleted messages", e);
         }
         finally {
-            return messages;
+            // Discord peut inclure des snowflakes bruts (strings) dans ce tableau pour des
+            // messages partiels/non-charges. Un seul element non-objet fait planter Discord
+            // plus tard avec "Cannot use 'in' operator to search for 'flags' in <id>".
+            // On filtre TOUJOURS, meme quand il n'y a pas de messages supprimes a reinjecter
+            // (c'est le cas le plus frequent, donc le bug le plus frequent).
+            const extra = (messages as any).extra;
+            let w = 0;
+            for (let i = 0; i < messages.length; i++) {
+                if (isMessageObject(messages[i])) messages[w++] = messages[i];
+            }
+            messages.length = w;
+            if (extra !== undefined) (messages as any).extra = extra;
         }
+        return messages;
     },
 
     isDeletedMessage: (id: string) => cacheSentMessages.get(id)?.deleted ?? false,
@@ -395,7 +412,6 @@ export default definePlugin({
             if (!MLMessage)
                 return this.oldGetMessage(channelId, messageId);
 
-            // Si on a déjà ce message combiné en cache, on le retourne
             if (combinedMessageCache.has(messageId)) {
                 return combinedMessageCache.get(messageId);
             }
@@ -406,7 +422,6 @@ export default definePlugin({
                 return combined;
             }
 
-            // update the edited message with the latest data
             const latestMessage = this.oldGetMessage(channelId, messageId);
             const combined = messageJsonToMessageClass({
                 message: {
@@ -415,10 +430,8 @@ export default definePlugin({
                 }
             });
 
-            // On ne met en cache que si on a un résultat stable
             combinedMessageCache.set(messageId, combined);
 
-            // Nettoyage périodique du cache pour éviter les fuites mémoire
             if (combinedMessageCache.size > 1000) {
                 const firstKey = combinedMessageCache.keys().next().value;
                 combinedMessageCache.delete(firstKey);

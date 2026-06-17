@@ -146,17 +146,16 @@ const forceGC = () => {
     } catch {}
 };
 
-function _onGCVisChange() {
-    if (document.hidden) {
-        if (limitMsgCache) pruneMessageCaches();
-        forceGC();
-    }
-}
-
-function _onGCBlur() {
-    if (limitMsgCache) pruneMessageCaches();
-    forceGC();
-}
+// BUGFIX: _onGCVisChange and _onGCBlur were registered as separate event
+// listeners in start() while applyBgFpsPatch() also registered _onVisChange
+// and _onBlur for the same events. This caused double-firing on every
+// background transition (both callbacks ran, doubling GC calls and creating
+// race conditions between _installRafThrottle and pruneMessageCaches).
+//
+// Fix: GC/cache logic is now inlined directly into the RAF-throttle callbacks
+// (_onVisChange, _onBlur) so a single listener per event handles everything.
+// The standalone _onGCVisChange/_onGCBlur functions and their separate
+// addEventListener calls are removed.
 
 const CHANNEL_STALE_MS = 5 * 60 * 1000;
 
@@ -230,16 +229,24 @@ function applyBgFpsPatch(enable: boolean) {
     }
 }
 
+// Unified visibilitychange handler: throttles RAF + prunes cache + GC
 function _onVisChange() {
     if (document.hidden) {
         _installRafThrottle();
+        // GC/cache work that previously lived in the separate _onGCVisChange listener
+        if (limitMsgCache) pruneMessageCaches();
+        forceGC();
     } else if (document.hasFocus()) {
         _uninstallRafThrottle();
     }
 }
 
+// Unified blur handler: throttles RAF + prunes cache + GC
 function _onBlur() {
     _installRafThrottle();
+    // GC/cache work that previously lived in the separate _onGCBlur listener
+    if (limitMsgCache) pruneMessageCaches();
+    forceGC();
 }
 
 function _onFocus() {
@@ -423,10 +430,10 @@ export default definePlugin({
         buildAndInjectCss();
 
         if (limitMsgCache) startCacheCleaner();
+        // applyBgFpsPatch registers its own unified visibilitychange/blur/focus
+        // listeners (_onVisChange/_onBlur/_onFocus) which now also handle GC/cache.
+        // No separate _onGCVisChange/_onGCBlur listeners needed.
         if (settings.store.reduceFpsBackground) applyBgFpsPatch(true);
-
-        document.addEventListener("visibilitychange", _onGCVisChange);
-        window.addEventListener("blur", _onGCBlur);
     },
 
     stop() {
@@ -439,8 +446,5 @@ export default definePlugin({
         removeCss();
         stopCacheCleaner();
         applyBgFpsPatch(false);
-
-        document.removeEventListener("visibilitychange", _onGCVisChange);
-        window.removeEventListener("blur", _onGCBlur);
     }
 });

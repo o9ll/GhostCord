@@ -147,6 +147,13 @@ export const globPlugins = kind => ({
 
         build.onLoad({ filter, namespace: "import-plugins" }, async () => {
             const pluginDirs = ["plugins/_api", "plugins/_core", "plugins", "userplugins", "nightcordplugins", "nightcordplugins/_api"];
+            
+            let blacklist = [];
+            try {
+                const blacklistContent = await readFile(join(process.cwd(), "blacklist.txt"), "utf-8");
+                blacklist = blacklistContent.split("\n").map(l => l.trim()).filter(l => l);
+            } catch(e) {}
+            
             let code = "";
             let pluginsCode = "\n";
             let metaCode = "\n";
@@ -169,6 +176,13 @@ export const globPlugins = kind => ({
                     if (!isDir && !isSupportedFile) continue;
 
                     const target = getPluginTarget(fileName);
+                    const cleanFileName = fileName.replace(/\.tsx?$/, "").replace(/\.jsx?$/, "").replace(/\.css$/, "");
+
+                    if (kind === "web" && blacklist.includes(cleanFileName)) {
+                        const name = await resolvePluginName(fullDir, file);
+                        excludedCode += `${JSON.stringify(name)}:${JSON.stringify(target || "web")},\n`;
+                        continue;
+                    }
 
                     if (target && !IS_REPORTER) {
                         const excluded =

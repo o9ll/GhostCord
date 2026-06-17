@@ -12,14 +12,16 @@ import { classNameFactory } from "@utils/css";
 import { Logger } from "@utils/Logger";
 import { ModalCloseButton, ModalContent, ModalHeader, ModalRoot, ModalSize,openModal } from "@utils/modal";
 import { OptionType, Plugin } from "@utils/types";
+import { HeadingPrimary } from "@components/Heading";
 import { Button } from "@components/Button";
-import { React, showToast, Text, Toasts } from "@webpack/common";
+import { React, showToast, Text, Toasts, UserStore } from "@webpack/common";
 import { Settings } from "Vencord";
 import {domain} from "../../../../../DOMAIN.json";
 
 import { TUTORIAL_CACHE } from "./components/Common";
 import { openPluginModal } from "./PluginModal";
 import { TUTORIAL_PLUGIN_NAMES } from "./tutorialList";
+import { PluginMeta } from "~plugins";
 
 const logger = new Logger("PluginCard");
 const cl = classNameFactory("vc-plugins-");
@@ -199,10 +201,45 @@ export function PluginCard({ plugin, disabled, onRestartNeeded, onMouseEnter, on
     );
 
     const tooltip = "Show Tutorial";
+    const isNightcord = !PluginMeta[plugin.name]?.userPlugin;
+    const iconType = isNightcord ? "nightcord" : "other";
+
+    function openCreditsModal() {
+        openModal(props => (
+            <ModalRoot {...props} size={ModalSize.SMALL}>
+                <ModalHeader>
+                    <HeadingPrimary>Credits - {plugin.name}</HeadingPrimary>
+                    <ModalCloseButton onClick={props.onClose} />
+                </ModalHeader>
+                <ModalContent style={{ padding: "16px", display: "flex", flexDirection: "column", gap: "16px", alignItems: "center" } as any}>
+                    {isNightcord ? (
+                        <a href="https://gitea.nightcord.st/nightcord/nightcord" target="_blank" rel="noopener noreferrer" style={{ display: "flex", alignItems: "center", gap: "12px", textDecoration: "none", color: "var(--text-normal)", fontSize: "20px", fontWeight: 600 }}>
+                            <img src="https://gitea.nightcord.st/assets/img/logo.svg" alt="Nightcord" style={{ width: 64, height: 64, borderRadius: "50%" }} />
+                            Nightcord
+                        </a>
+                    ) : (
+                        plugin.authors?.map(a => {
+                            const user = UserStore.getUser(a.id.toString());
+                            const avatarUrl = user ? user.getAvatarURL(undefined, 128) : `https://cdn.discordapp.com/avatars/${a.id}/${a.id}.png`;
+                            return (
+                                <div key={a.id.toString()} style={{ display: "flex", alignItems: "center", gap: "12px", fontSize: "20px", fontWeight: 600, color: "var(--text-normal)" }}>
+                                    <img src={avatarUrl} alt={a.name} style={{ width: 64, height: 64, borderRadius: "50%" }} />
+                                    <span>{a.name}</span>
+                                </div>
+                            );
+                        })
+                    )}
+                </ModalContent>
+            </ModalRoot>
+        ));
+    }
+
+    const hasSettings = plugin.settings?.def && Object.values(plugin.settings.def).some(s => s.type !== OptionType.CUSTOM && !s.hidden);
 
     return (
         <AddonCard
             name={plugin.name}
+            iconType={iconType}
             sourceBadge={hasTutorial ? sourceBadge : undefined}
             tooltip={tooltip}
             description={plugin.description}
@@ -213,16 +250,15 @@ export function PluginCard({ plugin, disabled, onRestartNeeded, onMouseEnter, on
             onMouseEnter={onMouseEnter}
             onMouseLeave={onMouseLeave}
             infoButton={
-                <button
-                    role="switch"
-                    onClick={() => openPluginModal(plugin, onRestartNeeded)}
-                    className={cl("info-button")}
-                >
-                    {plugin.settings?.def && Object.values(plugin.settings.def).some(s => s.type !== OptionType.CUSTOM && !s.hidden)
-                        ? <CogWheel className={cl("info-icon")} />
-                        : <InfoIcon className={cl("info-icon")} />
-                    }
-                </button>
+                hasSettings ? (
+                    <button
+                        role="button"
+                        onClick={() => openPluginModal(plugin, onRestartNeeded)}
+                        className={cl("info-button")}
+                    >
+                        <CogWheel className={cl("info-icon")} />
+                    </button>
+                ) : undefined
             } />
     );
 }

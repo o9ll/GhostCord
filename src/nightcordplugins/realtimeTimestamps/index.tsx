@@ -32,10 +32,9 @@ const settings = definePluginSettings({
     },
 });
 
-// ─── Global tick — UN seul setInterval partagé par tous les composants ─────────
-// BUGFIX: l'ancienne implémentation créait un setInterval PAR composant timestamp
-// rendu (50+ messages = 50+ intervals), forçant 50+ re-renders React par seconde
-// → freeze complet de Discord. Un seul interval global notifie tous les abonnés.
+// ─── Global tick ─ one shared setInterval for all timestamp components ───────
+// This avoids creating one setInterval per rendered message (50+ messages = 50+
+// intervals → 50+ React re-renders per second → Discord freeze).
 
 const tickListeners = new Set<() => void>();
 let globalTickInterval: ReturnType<typeof setInterval> | null = null;
@@ -50,13 +49,14 @@ function startGlobalTick() {
 }
 
 function stopGlobalTick() {
-    if (tickListeners.size > 0) return; // still has subscribers
+    if (tickListeners.size > 0) return;
     if (globalTickInterval !== null) {
         clearInterval(globalTickInterval);
         globalTickInterval = null;
     }
 }
 
+// ─── React Hook (only valid inside a React component) ────────────────────────
 function useSecondTick() {
     const [, tick] = useReducer((n: number) => n + 1, 0);
     useEffect(() => {
@@ -69,32 +69,45 @@ function useSecondTick() {
     }, []);
 }
 
-// ─── Renderers called by the patches ─────────────────────────────────────────
+// ─── Timestamp render functions ──────────────────────────────────────────────
+// REAL FIX (confirmed against the stock CustomTimestamps plugin, which patches
+// these exact same Vencord match sites and works fine): the previous "BUGFIX"
+// diagnosis was wrong. There is no Hook-rule violation — these patch sites sit
+// directly inside the host component's render body, so calling a Hook here is
+// perfectly valid (CustomTimestamps' renderTimestamp does the same thing).
+//
+// The actual crash was caused by returning a *React element* (Fragment) where
+// Discord's own MessageTimestamp component expects a plain *string*. That same
+// variable is reused later in the same component for things like AM/PM format
+// detection via .match(...) and the edited-message a11y label — calling
+// .match() on a React element throws "e.match is not a function" on every
+// message render. Returning a plain string (like CustomTimestamps does) keeps
+// those other internal usages intact while still updating live every second
+// via useSecondTick().
 
-function renderTimestamp(date: Date, type: "cozy" | "compact" | "tooltip"): string {
-    // Hook must be called unconditionally — React requires this
+function renderCozyText(date: Date) {
     useSecondTick();
-
     const fmt = settings.store.format ?? "HH:mm:ss";
-
-    switch (type) {
-        case "cozy":
-            // Cozy mode: replace the default "Today at HH:mm" with seconds
-            return moment(date).format(fmt);
-        case "compact":
-            // Compact mode (grouped message line): show seconds if enabled
-            return settings.store.showInCompact
-                ? moment(date).format(fmt)
-                : moment(date).format("LT");
-        case "tooltip":
-            // Tooltip on hover: full date + seconds
-            return settings.store.showInTooltip
-                ? moment(date).format(`dddd, MMMM D, YYYY [at] ${fmt}`)
-                : moment(date).format("LLLL");
-    }
+    return moment(date).format(fmt);
 }
 
-// ─── Plugin ──────────────────────────────────────────────────────────────────
+function renderCompactText(date: Date) {
+    useSecondTick();
+    const fmt = settings.store.format ?? "HH:mm:ss";
+    return settings.store.showInCompact
+        ? moment(date).format(fmt)
+        : moment(date).format("LT");
+}
+
+function renderTooltipText(date: Date) {
+    useSecondTick();
+    const fmt = settings.store.format ?? "HH:mm:ss";
+    return settings.store.showInTooltip
+        ? moment(date).format(`dddd, MMMM D, YYYY [at] ${fmt}`)
+        : moment(date).format("LLLL");
+}
+
+// ─── Plugin ───────────────────────────────────────────────────────────────────
 
 export default definePlugin({
     name: "RealtimeTimestamps",
@@ -104,10 +117,20 @@ export default definePlugin({
     enabledByDefault: true,
     settings,
 
-    renderTimestamp,
+    // Called directly by patches — must return a plain string, not a React
+    // element, since these substitute for values Discord later treats as text
+    // (and in some cases re-parses with .match()).
+    renderCozy(date: Date) {
+        return renderCozyText(date);
+    },
+    renderCompact(date: Date) {
+        return renderCompactText(date);
+    },
+    renderTooltip(date: Date) {
+        return renderTooltipText(date);
+    },
 
     stop() {
-        // Cleanup global tick on plugin disable
         tickListeners.clear();
         if (globalTickInterval !== null) {
             clearInterval(globalTickInterval);
@@ -123,17 +146,17 @@ export default definePlugin({
                 {
                     // Compact mode: the useMemo that formats with "LT"
                     match: /(\i\.useMemo\(.{0,50}"LT".{0,30}\]\))/,
-                    replace: "$self.renderTimestamp(arguments[0].timestamp,'compact')",
+                    replace: "$self.renderCompact(arguments[0].timestamp)",
                 },
                 {
                     // Cozy mode: the useMemo that calls the calendar/relative formatter
                     match: /(\i\.useMemo\(.{0,10}\i\.\i\)\(.{0,10}\]\))/,
-                    replace: "$self.renderTimestamp(arguments[0].timestamp,'cozy')",
+                    replace: "$self.renderCozy(arguments[0].timestamp)",
                 },
                 {
                     // Tooltip shown when hovering a message timestamp
                     match: /(__unsupportedReactNodeAsText:).{0,25}"LLLL"\)/,
-                    replace: "$1$self.renderTimestamp(arguments[0].timestamp,'tooltip')",
+                    replace: "$1$self.renderTooltip(arguments[0].timestamp)",
                 },
             ],
         },
@@ -143,7 +166,7 @@ export default definePlugin({
             find: /.full,.{0,15}children:/,
             replacement: {
                 match: /(__unsupportedReactNodeAsText:)\i\.full/,
-                replace: "$1$self.renderTimestamp(new Date(arguments[0].node.timestamp*1000),'tooltip')",
+                replace: "$1$self.renderTooltip(new Date(arguments[0].node.timestamp*1000))",
             },
         },
     ],

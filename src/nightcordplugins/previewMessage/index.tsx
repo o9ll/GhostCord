@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Nightcord, a Discord client mod
  * Copyright (c) 2026 contributors
  * SPDX-License-Identifier: GPL-3.0-or-later
@@ -9,12 +9,16 @@ import "./styles.css";
 import definePlugin from "@utils/types";
 import { React, ChannelStore, FluxDispatcher, UserStore, ReactDOM, createRoot } from "@webpack/common";
 import { findByPropsLazy } from "@webpack";
+import { sendMessage } from "@utils/discord";
 import ErrorBoundary from "@components/ErrorBoundary";
 
 // ── Stores ─────────────────────────────────────────────────────────────────
 
 const ReadStateStore = findByPropsLazy("getUnreadCount", "getMentionCount");
 const MessageStore = findByPropsLazy("getMessages");
+const ChannelStoreVencord = findByPropsLazy("getChannel", "hasChannel");
+const ReadStateUtils = findByPropsLazy("ack", "ackChannel");
+const MessageActions = findByPropsLazy("fetchMessages", "sendMessage");
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -28,12 +32,13 @@ function formatTime(ts: string | number | Date): string {
 }
 
 function getPreview(msg: any): { text: string; attach: boolean; } {
+    if (msg.type === 3) return { text: "📞 Call", attach: true };
     if (msg.content?.trim()) return { text: msg.content.trim(), attach: false };
     if (msg.attachments?.length)
-        return { text: `📎 ${msg.attachments.length > 1 ? msg.attachments.length + " pièces jointes" : "Pièce jointe"}`, attach: true };
+        return { text: `📎 ${msg.attachments.length > 1 ? msg.attachments.length + " attachments" : "Attachment"}`, attach: true };
     if (msg.stickers?.length) return { text: "🎭 Sticker", attach: true };
     if (msg.embeds?.length) return { text: "🔗 Embed", attach: true };
-    return { text: "📷 Média", attach: true };
+    return { text: "📷 Media", attach: true };
 }
 
 function avatarUrl(userId: string, hash: string | null): string {
@@ -52,18 +57,29 @@ function Tooltip({ channelId, rect }: { channelId: string; rect: DOMRect; }) {
 
     React.useEffect(() => {
         let isMounted = true;
-        // Try getting messages from Discord's local store first
-        let localMsgs = [];
-        try {
-            const msgs = MessageStore?.getMessages(channelId);
-            if (msgs && msgs._array && msgs._array.length > 0) {
-                localMsgs = [...msgs._array].reverse();
-            }
-        } catch {}
         
-        if (isMounted) {
-            setMessages(localMsgs);
-        }
+        const loadMessages = async () => {
+            let msgs = MessageStore?.getMessages(channelId);
+            
+            if (!msgs || !msgs._array || msgs._array.length === 0) {
+                try {
+                    await MessageActions?.fetchMessages({ channelId });
+                    msgs = MessageStore?.getMessages(channelId);
+                } catch (e) {
+                    console.warn("[PreviewMessage] Failed to fetch messages", e);
+                }
+            }
+            
+            if (isMounted) {
+                let localMsgs = [];
+                if (msgs && msgs._array && msgs._array.length > 0) {
+                    localMsgs = [...msgs._array].reverse();
+                }
+                setMessages(localMsgs);
+            }
+        };
+
+        loadMessages();
         return () => { isMounted = false; };
     }, [channelId]);
 
@@ -100,8 +116,8 @@ function Tooltip({ channelId, rect }: { channelId: string; rect: DOMRect; }) {
                 {messages.length === 0 ? (
                     <div className="pm-empty">
                         {unread > 0
-                            ? `${unread} message${unread > 1 ? "s" : ""} non lu${unread > 1 ? "s" : ""}`
-                            : "Aucun message à afficher"}
+                            ? `${unread} unread message${unread > 1 ? "s" : ""}`
+                            : "No messages to display"}
                     </div>
                 ) : (
                     <div className="pm-messages">
@@ -116,6 +132,32 @@ function Tooltip({ channelId, rect }: { channelId: string; rect: DOMRect; }) {
                         })}
                     </div>
                 )}
+
+                {/* Reply Input */}
+                <div className="pm-reply">
+                    <input 
+                        type="text" 
+                        className="pm-reply-input" 
+                        placeholder={`Reply to ${name ?? "this user"}...`} 
+                        autoFocus 
+                        onKeyDown={async e => {
+                            if (e.key === "Enter") {
+                                const val = e.currentTarget.value.trim();
+                                if (!val) return;
+                                e.preventDefault();
+                                e.currentTarget.value = "";
+                                try {
+                                    await sendMessage(channelId, { content: val });
+                                    const channel = ChannelStoreVencord?.getChannel(channelId);
+                                    if (channel) ReadStateUtils?.ackChannel?.(channel);
+                                    hide(0);
+                                } catch (err) {
+                                    console.error("[PreviewMessage] Failed to reply", err);
+                                }
+                            }
+                        }} 
+                    />
+                </div>
             </div>
         </div>
     );
@@ -210,6 +252,22 @@ function startObserver() {
     scan(document);
 }
 
+// ── Document-level handlers (named so they can be removed in stop) ─────────
+// BUGFIX: previously these were inline anonymous lambdas inside start(), which
+// means removeEventListener could never find them to remove them. Each call to
+// start() (e.g. plugin reload) would add an extra pair of listeners that were
+// never cleaned up, accumulating indefinitely and causing latency.
+
+function _onDocMouseEnter(e: Event) {
+    if ((e.target as HTMLElement)?.closest?.("#nc-pm-root")) {
+        if (hideTimer) { clearTimeout(hideTimer); hideTimer = null; }
+    }
+}
+
+function _onDocMouseLeave(e: Event) {
+    if ((e.target as HTMLElement)?.closest?.("#nc-pm-root")) hide();
+}
+
 // ── Plugin ─────────────────────────────────────────────────────────────────
 
 export default definePlugin({
@@ -223,14 +281,8 @@ export default definePlugin({
         startObserver();
 
         // Stay open when hovering the tooltip itself
-        document.addEventListener("mouseenter", e => {
-            if ((e.target as HTMLElement)?.closest?.("#nc-pm-root")) {
-                if (hideTimer) { clearTimeout(hideTimer); hideTimer = null; }
-            }
-        }, true);
-        document.addEventListener("mouseleave", e => {
-            if ((e.target as HTMLElement)?.closest?.("#nc-pm-root")) hide();
-        }, true);
+        document.addEventListener("mouseenter", _onDocMouseEnter, true);
+        document.addEventListener("mouseleave", _onDocMouseLeave, true);
     },
 
     stop() {
@@ -238,6 +290,10 @@ export default definePlugin({
         if (hideTimer) { clearTimeout(hideTimer); hideTimer = null; }
         renderFn?.(null);
         container?.remove(); container = null; renderFn = null;
+
+        // Remove named document listeners (was missing — caused listener leaks)
+        document.removeEventListener("mouseenter", _onDocMouseEnter, true);
+        document.removeEventListener("mouseleave", _onDocMouseLeave, true);
 
         document.querySelectorAll<HTMLElement>("[data-pm-hooked]").forEach(el => {
             delete el.dataset.pmHooked;
