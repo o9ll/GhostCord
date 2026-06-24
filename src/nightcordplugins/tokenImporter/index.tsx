@@ -436,12 +436,22 @@ function TokenModal({ rootProps }: { rootProps: any; }) {
                         <input ref={fileRef} type="file" accept=".txt,text/plain" style={{ display: "none" }} onChange={handleFile} />
                         {results.length > 0 && (
                             <div className="ti-results">
-                                {done && (
-                                    <div className="ti-results-summary">
-                                        <span className="ti-st ti-st--ok"><CheckIcon /> {results.filter(r => r.status === "valid").length} valid{results.filter(r => r.status === "valid").length !== 1 ? "s" : ""}</span>
-                                        <span className="ti-st ti-st--bad"><CrossIcon /> {results.filter(r => r.status === "invalid").length} invalid{results.filter(r => r.status === "invalid").length !== 1 ? "s" : ""}</span>
-                                    </div>
-                                )}
+                {done && (() => {
+                                    const validCount = results.filter(r => r.status === "valid").length;
+                                    const invalidCount = results.filter(r => r.status === "invalid").length;
+                                    return (
+                                        <div className="ti-results-summary">
+                                            <div className="ti-summary-pill ti-summary-pill--ok">
+                                                <CheckIcon />
+                                                <span>{validCount} valid{validCount !== 1 ? "s" : ""}</span>
+                                            </div>
+                                            <div className="ti-summary-pill ti-summary-pill--bad">
+                                                <CrossIcon />
+                                                <span>{invalidCount} invalid{invalidCount !== 1 ? "s" : ""}</span>
+                                            </div>
+                                        </div>
+                                    );
+                                })()}
                                 <div className="ti-list">
                                     {results.map((r, i) => (
                                         <div key={i} className={`ti-row ti-row--${r.status === "valid" ? "valid" : r.status === "checking" ? "idle" : "invalid"}`}>

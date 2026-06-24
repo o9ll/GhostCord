@@ -18,7 +18,7 @@ import { Divider } from "@components/Divider";
 import { Flex } from "@components/Flex";
 import { FormSwitch } from "@components/FormSwitch";
 import { Heading } from "@components/Heading";
-import { HeartIcon,LogIcon, OwnerCrownIcon, PaintbrushIcon, PlanetIcon, RestartIcon } from "@components/Icons";
+import { HeartIcon, GithubIcon, LogIcon, OwnerCrownIcon, PaintbrushIcon, PlanetIcon, RestartIcon } from "@components/Icons";
 import { Notice } from "@components/Notice";
 import { Paragraph } from "@components/Paragraph";
 import { openPluginModal, SettingsTab, wrapTab } from "@components/settings";
@@ -47,7 +47,7 @@ function useDiscordUser(userId: string) {
         const cached = UserStore?.getUser(userId);
         if (cached) {
             setUser({
-                name: cached.globalName ?? cached.username,
+                name: cached.username,
                 pfp: cached.avatar
                     ? `https://cdn.discordapp.com/avatars/${userId}/${cached.avatar}.webp?size=128`
                     : `https://cdn.discordapp.com/embed/avatars/${Number(BigInt(userId) >> 22n) % 6}.png`
@@ -59,7 +59,7 @@ function useDiscordUser(userId: string) {
         })
             .then(r => r.json())
             .then(u => setUser({
-                name: u.global_name ?? u.username ?? userId,
+                name: u.username ?? userId,
                 pfp: u.avatar
                     ? `https://cdn.discordapp.com/avatars/${userId}/${u.avatar}.webp?size=128`
                     : `https://cdn.discordapp.com/embed/avatars/${Number(BigInt(userId) >> 22n) % 6}.png`
@@ -87,6 +87,8 @@ function DevCard({ id, role }: { id: string; role: string; }) {
     );
 }
 
+
+
 function DevTeamSection() {
     const [showDevs, setShowDevs] = React.useState(false);
 
@@ -94,9 +96,9 @@ function DevTeamSection() {
         <>
             <QuickActionCard>
                 <QuickAction
-                    Icon={LogIcon}
-                    text="Notification Log"
-                    action={openNotificationLogModal}
+                    Icon={GithubIcon}
+                    text="Source Code"
+                    action={() => window.open("https://gitea.nightcord.st/nightcord/nightcord", "_blank")}
                 />
                 <QuickAction
                     Icon={PaintbrushIcon}
@@ -138,6 +140,7 @@ function DevTeamSection() {
                     {DEV_TEAM_IDS.map(dev => (
                         <DevCard key={dev.id} id={dev.id} role={dev.role} />
                     ))}
+
                 </div>
             )}
         </>

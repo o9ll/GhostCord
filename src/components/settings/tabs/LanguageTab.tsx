@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-import { LANGUAGES, Language, t } from "@api/i18n";
+import { LANGUAGES, LANGUAGE_FLAGS, Language, t } from "@api/i18n";
 import { useSettings } from "@api/Settings";
 import { Divider } from "@components/Divider";
 import { Heading } from "@components/Heading";
@@ -36,14 +36,18 @@ const LANG_PREVIEW: Record<Language, { label: string; sample: string; }> = {
     es: { label: "Español", sample: "Plugins · Temas · Actualizador · Sincronización" },
     ru: { label: "Русский", sample: "Плагины · Темы · Обновления · Синхронизация" },
     zh: { label: "中文", sample: "插件 · 主题 · 更新 · 同步" },
+    ar: { label: "العربية", sample: "إضافات · سمات · محدث · مزامنة" },
 };
 
 const languageOptions = (Object.keys(LANGUAGES) as Language[]).map(lang => ({
-    label: LANG_PREVIEW[lang].label,
+    label: LANG_PREVIEW[lang]?.label ?? LANGUAGES[lang],
     value: lang,
 }));
 
 function FlagIcon({ lang }: { lang: Language; }) {
+    if (!FLAG_ICONS[lang]) {
+        return <div style={{...FLAG_ICON_STYLE, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "16px"}}>{LANGUAGE_FLAGS[lang]}</div>;
+    }
     return <img src={FLAG_ICONS[lang]} alt={lang} style={FLAG_ICON_STYLE} />;
 }
 

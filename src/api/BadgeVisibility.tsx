@@ -68,11 +68,23 @@ async function fetchHiddenBadgeSources(userId: string) {
 }
 
 /**
- * Loads the current user's own hidden badge sources from the cloud.
+ * Loads the current user's own hidden badge sources from the cloud and local storage.
  * Call once on startup (after we know our own user id).
  */
 export async function loadOwnHiddenBadgeSources(userId: string) {
     myUserId = userId;
+    
+    // 1. Charge la sauvegarde locale en premier pour éviter que ça clignote ou disparaisse sans compte
+    try {
+        const localData = localStorage.getItem("nightcord_hidden_badges");
+        if (localData) {
+            const parsed = JSON.parse(localData);
+            if (Array.isArray(parsed)) {
+                myHiddenSources = parsed;
+            }
+        }
+    } catch { }
+
     try {
         const token = await getStoredToken();
         if (!token) {
@@ -82,9 +94,14 @@ export async function loadOwnHiddenBadgeSources(userId: string) {
         const { getOwnPluginConfig } = await import("./PluginSync");
         const result = await getOwnPluginConfig(PLUGIN_KEY, token);
         const hidden: BadgeSource[] = Array.isArray(result?.config?.settings?.hidden) ? result.config.settings.hidden : [];
-        myHiddenSources = hidden;
+        
+        // La version cloud a priorité si elle existe (et on met à jour le local)
+        if (result?.config?.settings?.hidden !== undefined) {
+            myHiddenSources = hidden;
+            localStorage.setItem("nightcord_hidden_badges", JSON.stringify(hidden));
+        }
     } catch (e) {
-        // no-op — keep defaults
+        // no-op — keep defaults or local version
     } finally {
         loaded = true;
         emitBadgeVisibilityChange();
@@ -97,6 +114,12 @@ export async function loadOwnHiddenBadgeSources(userId: string) {
  */
 export async function setOwnHiddenBadgeSources(hidden: BadgeSource[]) {
     myHiddenSources = hidden;
+    
+    // Sauvegarde locale immédiate
+    try {
+        localStorage.setItem("nightcord_hidden_badges", JSON.stringify(hidden));
+    } catch { }
+
     emitBadgeVisibilityChange();
 
     let token = await getStoredToken();

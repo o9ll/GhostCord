@@ -82,22 +82,12 @@ async function hashCheck(code: string, salt: string, iterations: number, expecte
 // ─── Persisted data (separate from settings, stored in IndexedDB) ───
 
 interface PLData {
-    hash: string;
-    salt: string | null;
-    iterations: number | null;
-    attempts: number;
-    delayUntil: number | null;
-    locked: boolean;
-}
-
-const defaultData: PLData = { hash: "", salt: null, iterations: null, attempts: 0, delayUntil: null, locked: false };
-let data: PLData = { ...defaultData };
-
-async function loadData() {
-    data = { ...defaultData, ...(await DataStore.get<PLData>(DS_KEY)) };
-}
-async function saveData() {
-    await DataStore.set(DS_KEY, data);
+    hash?: string;
+    salt?: string | null;
+    iterations?: number | null;
+    attempts?: number;
+    delayUntil?: number | null;
+    locked?: boolean;
 }
 
 // ─── Settings ───
@@ -143,7 +133,33 @@ const settings = definePluginSettings({
         description: "Keybind to lock Discord (e.g. control+l)",
         default: "control+l",
     },
+}).withPrivateSettings<PLData>();
+
+const data = new Proxy({} as PLData, {
+    get(_, prop: keyof PLData) {
+        return (settings.store as any)[prop];
+    },
+    set(_, prop: keyof PLData, value: any) {
+        (settings.store as any)[prop] = value;
+        return true;
+    }
 });
+
+async function loadData() {
+    const oldData = await DataStore.get<PLData>(DS_KEY);
+    if (oldData && oldData.hash) {
+        data.hash = oldData.hash;
+        data.salt = oldData.salt;
+        data.iterations = oldData.iterations;
+        data.attempts = oldData.attempts;
+        data.delayUntil = oldData.delayUntil;
+        data.locked = oldData.locked;
+        await DataStore.del(DS_KEY);
+    }
+}
+function saveData() {
+    // Auto-saved by Vencord settings proxy
+}
 
 function codeLength() {
     switch (settings.store.codeType) {
@@ -335,7 +351,12 @@ function PasscodeLocker({ type, button, onDone }: LockerProps) {
                 }
                 return;
             }
-            const ok = data.hash ? await hashCheck(code, data.salt!, data.iterations!, data.hash) : false;
+            let ok = false;
+            if (data.hash) {
+                ok = await hashCheck(code, data.salt!, data.iterations!, data.hash);
+            } else {
+                ok = (code === "0000" || code === "000000");
+            }
             if (ok) close(true);
             else fail();
         } catch (e) {
@@ -524,10 +545,6 @@ function forceReset(reason?: string) {
 
 function openLocker(type: LockType, button: HTMLElement | null, onSuccess?: (newCode?: string) => void) {
     if (root) return;
-    if (type !== "editor" && !data.hash) {
-        showToast("Please first set up the passcode in the plugin settings.", Toasts.Type.FAILURE);
-        return;
-    }
 
     container = document.createElement("div");
     document.body.appendChild(container);
@@ -538,9 +555,11 @@ function openLocker(type: LockType, button: HTMLElement | null, onSuccess?: (new
     // (e.g. an uncaught error prevented onDone from firing) — auto-recover instead
     // of leaving the user permanently locked out of every button/shortcut.
     clearTimeout(watchdogTimeout);
-    watchdogTimeout = setTimeout(() => {
-        forceReset("overlay stayed open longer than 45s, auto-clearing to prevent a permanent soft-lock");
-    }, 45000);
+    if (type !== "default") {
+        watchdogTimeout = setTimeout(() => {
+            forceReset("overlay stayed open longer than 45s, auto-clearing to prevent a permanent soft-lock");
+        }, 45000);
+    }
 
     let deafened = false;
     try {
@@ -601,10 +620,6 @@ function openLocker(type: LockType, button: HTMLElement | null, onSuccess?: (new
 
 function lock(button: HTMLElement | null = document.body) {
     if (isLocked) return;
-    if (!data.hash) {
-        showToast("Please first set up the passcode in the plugin settings.", Toasts.Type.FAILURE);
-        return;
-    }
     try {
         openLocker("default", button);
         // Only commit the locked state once the overlay actually rendered
@@ -686,9 +701,7 @@ export default definePlugin({
                             forceReset("settings button clicked while root was set but no overlay was actually in the DOM");
                         }
                         lock(document.body);
-                    }}
-                    disabled={!data.hash}
-                >
+                    }}>
                     Lock Discord Now
                 </button>
             </div>
@@ -730,10 +743,14 @@ export default definePlugin({
         (this as any)._onKeyDown = onKeyDown;
         window.addEventListener("keydown", onKeyDown);
 
-        (this as any)._onBlur = () => resetAutolock();
-        (this as any)._onFocus = () => clearTimeout(autolockTimeout);
-        window.addEventListener("blur", (this as any)._onBlur);
-        window.addEventListener("focus", (this as any)._onFocus);
+        (this as any)._activityListener = () => {
+            if (!isLocked) resetAutolock();
+        };
+        window.addEventListener("mousemove", (this as any)._activityListener);
+        window.addEventListener("keydown", (this as any)._activityListener);
+        window.addEventListener("mousedown", (this as any)._activityListener);
+        
+        resetAutolock();
 
         if (settings.store.lockOnStartup || data.locked) {
             setTimeout(() => {
@@ -754,8 +771,9 @@ export default definePlugin({
             originalShowNotification = null;
         }
         window.removeEventListener("keydown", (this as any)._onKeyDown);
-        window.removeEventListener("blur", (this as any)._onBlur);
-        window.removeEventListener("focus", (this as any)._onFocus);
+        window.removeEventListener("mousemove", (this as any)._activityListener);
+        window.removeEventListener("keydown", (this as any)._activityListener);
+        window.removeEventListener("mousedown", (this as any)._activityListener);
         clearTimeout(autolockTimeout);
         clearTimeout(watchdogTimeout);
         delete (window as any).__nightcordPCLReset;

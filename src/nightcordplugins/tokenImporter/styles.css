@@ -440,8 +440,31 @@
 
 .ti-results-summary {
     display: flex;
-    gap: 12px;
-    font-size: 12px;
-    padding: 0 2px;
+    gap: 8px;
+    font-size: 13px;
+    padding: 6px 4px;
     align-items: center;
+}
+
+.ti-summary-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+}
+
+.ti-summary-pill--ok {
+    background: rgba(59, 165, 92, 0.15);
+    color: #3ba55c;
+    border: 1px solid rgba(59, 165, 92, 0.25);
+}
+
+.ti-summary-pill--bad {
+    background: rgba(237, 66, 69, 0.12);
+    color: #ed4245;
+    border: 1px solid rgba(237, 66, 69, 0.2);
 }

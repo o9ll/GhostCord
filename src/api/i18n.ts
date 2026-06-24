@@ -6,7 +6,7 @@
 
 import { Settings } from "@api/Settings";
 
-export type Language = "en" | "fr" | "es" | "ru" | "zh";
+export type Language = "en" | "fr" | "es" | "ru" | "zh" | "ar";
 
 export const LANGUAGES: Record<Language, string> = {
     en: "English",
@@ -14,6 +14,7 @@ export const LANGUAGES: Record<Language, string> = {
     es: "Español",
     ru: "Русский",
     zh: "中文",
+    ar: "العربية",
 };
 
 export const LANGUAGE_FLAGS: Record<Language, string> = {
@@ -22,6 +23,7 @@ export const LANGUAGE_FLAGS: Record<Language, string> = {
     es: "🇪🇸",
     ru: "🇷🇺",
     zh: "🇨🇳",
+    ar: "🇸🇦",
 };
 
 // All Nightcord UI strings. Key = English original, value = translations per language.

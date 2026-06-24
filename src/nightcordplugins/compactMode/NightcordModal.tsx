@@ -8,7 +8,7 @@ import ErrorBoundary from "@components/ErrorBoundary";
 import { ModalContent, ModalProps, ModalRoot, ModalSize, openModal } from "@utils/modal";
 import { React, useState } from "@webpack/common";
 
-import { ThemesTab, ChangelogTab, PluginsTab, BackupAndRestoreTab, UpdaterTab, VencordTab } from "@components/settings/tabs";
+import { ThemesTab, ChangelogTab, PluginsTab, BackupAndRestoreTab, UpdaterTab, VencordTab, SyncTab, LanguageTab } from "@components/settings/tabs";
 import IconsTab from "@nightcordplugins/iconViewer/components/IconsTab";
 import { CreateThemeTab } from "@nightcordplugins/createTheme/components/CreateThemeTab";
 
@@ -70,6 +70,18 @@ const TABS: TabDef[] = [
         icon: "M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z",
         description: "Browse all Discord icons",
     },
+    {
+        id: "sync",
+        label: "Synchronization",
+        icon: "M16.8333 19H5.16667C3.16667 19 1.5 17.3333 1.5 15.3333C1.5 13.4 2.96667 11.8667 4.83333 11.6667V11.3333C4.83333 7.86667 7.7 5 11.1667 5C14.0333 5 16.5667 6.93333 17.3 9.66667C19.7 9.86667 21.5 11.8667 21.5 14.3333C21.5 16.9333 19.4333 19 16.8333 19Z",
+        description: "Sync Nightcord settings across devices",
+    },
+    {
+        id: "language",
+        label: "Language",
+        icon: "M12.87 15.07l-2.54-2.51.03-.03c1.74-1.94 2.98-4.17 3.71-6.53H17V4h-7V2H8v2H1v1.99h11.17C11.5 7.92 10.44 9.75 9 11.35 8.07 10.32 7.3 9.19 6.69 8h-2c.73 1.63 1.73 3.17 2.98 4.56l-5.09 5.02L4 19l5-5 3.11 3.11.76-2.04zM18.5 10h-2L12 22h2l1.12-3h4.75L21 22h2l-4.5-12zm-2.62 7l1.62-4.33L19.12 17h-3.24z",
+        description: "Change Nightcord's interface language",
+    },
 ];
 
 // ── Modal inner ───────────────────────────────────────────────────────────────
@@ -92,10 +104,12 @@ function NightcordModalInner({ onClose }: { onClose: () => void; }) {
         case "changelog": TabContent = <ChangelogTab />; break;
         case "backup": TabContent = <BackupAndRestoreTab />; break;
         case "iconFinder": TabContent = <IconsTab />; break;
+        case "sync": TabContent = <SyncTab />; break;
+        case "language": TabContent = <LanguageTab />; break;
     }
 
     return (
-        <div className="nc-modal-root theme-dark">
+        <div className="nc-modal-root theme-dark" data-theme="dark" style={{ color: "var(--text-normal, #dbdee1)" }}>
             {/* Sidebar */}
             <div className="nc-modal-sidebar">
                 <div className="nc-modal-sidebar-header">
