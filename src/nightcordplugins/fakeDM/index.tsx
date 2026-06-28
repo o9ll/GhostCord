@@ -8,7 +8,7 @@ import "./styles.css";
 
 import { ChatBarButton, ChatBarButtonFactory } from "@api/ChatButtons";
 import definePlugin from "@utils/types";
-import { ChannelStore, FluxDispatcher, IconUtils, React, ReactDOM,SelectedChannelStore, UserStore } from "@webpack/common";
+import { ChannelStore, FluxDispatcher, IconUtils, MessageStore, React, ReactDOM, SelectedChannelStore, UserStore } from "@webpack/common";
 
 // ─── Unique IDs ─────────────────────────────────────────────────────────────
 let _idCounter = 0;
@@ -272,11 +272,13 @@ function scheduleRestore() {
     FluxDispatcher.subscribe("CONNECTION_OPEN", _restoreHandler);
 }
 
-function doRestore() {
-    const fakes = loadPersisted();
+function doRestoreForChannel(channelId: string) {
+    const fakes = loadPersisted().filter(f => f.channelId === channelId);
     if (!fakes.length) return;
 
     for (const f of fakes) {
+        if (MessageStore.getMessage(channelId, f.snowflakeId)) continue;
+        
         if (f.type === "message") {
             const author = UserStore.getUser(f.authorId);
             if (!author) continue;
@@ -294,6 +296,19 @@ function doRestore() {
             );
         }
     }
+}
+
+function doRestore() {
+    const channelId = SelectedChannelStore.getChannelId();
+    if (channelId) doRestoreForChannel(channelId);
+}
+
+function handleLoadMessages(e: any) {
+    if (e.channelId) setTimeout(() => doRestoreForChannel(e.channelId), 50);
+}
+
+function handleChannelSelect(e: any) {
+    if (e.channelId) setTimeout(() => doRestoreForChannel(e.channelId), 400);
 }
 
 // ─── Date helpers ─────────────────────────────────────────────────────────────
@@ -594,6 +609,8 @@ export default definePlugin({
 
     start() {
         scheduleRestore();
+        FluxDispatcher.subscribe("LOAD_MESSAGES_SUCCESS", handleLoadMessages);
+        FluxDispatcher.subscribe("CHANNEL_SELECT", handleChannelSelect);
     },
 
     stop() {
@@ -601,6 +618,8 @@ export default definePlugin({
             FluxDispatcher.unsubscribe("CONNECTION_OPEN", _restoreHandler);
             _restoreHandler = null;
         }
+        FluxDispatcher.unsubscribe("LOAD_MESSAGES_SUCCESS", handleLoadMessages);
+        FluxDispatcher.unsubscribe("CHANNEL_SELECT", handleChannelSelect);
         fakeIds.clear();
         _idCounter = 0;
     },

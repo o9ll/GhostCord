@@ -63,33 +63,32 @@ async function scan(): Promise<VoiceChannel[]> {
                         ? IconUtils.getGuildIconURL({ id: guildId, icon: guild.icon, size: 32 })
                         : null;
 
-                    // Utilise getChannels() qui retourne TOUS les canaux du serveur
-                    // (y compris ceux sans permission) — exactement comme le Gateway Discord
                     const allChannels = GuildChannelStore.getChannels?.(guildId) ?? {};
-                    // Iterate through all categories: VOCAL, GUILD_STAGE_VOICE, and raw arrays
-                    const voiceItems: any[] = [
-                        ...(allChannels.VOCAL ?? []),
-                        ...(allChannels[2] ?? []), // type 2 = voice
-                        ...(allChannels[13] ?? []), // type 13 = stage
-                    ];
-                    // Deduplicate by id
+
+                    // Collect ALL items from ALL keys — don't assume the key names
                     const seen = new Set<string>();
-                    for (const item of voiceItems) {
-                        const ch = item?.channel ?? item;
-                        if (!ch?.id || seen.has(ch.id)) continue;
-                        seen.add(ch.id);
-                        const cName: string = ch.name ?? "";
-                        out.push({
-                            channelId: ch.id,
-                            channelName: cName,
-                            channelType: ch.type ?? 2,
-                            guildId,
-                            guildName: gName,
-                            guildIcon: gIcon,
-                            memberCount: memberCount[ch.id] ?? 0,
-                            canAccess: true,
-                            searchIndex: `${cName.toLowerCase()} ${gName.toLowerCase()}`,
-                        });
+                    for (const key of Object.keys(allChannels)) {
+                        const arr = allChannels[key];
+                        if (!Array.isArray(arr)) continue;
+                        for (const item of arr) {
+                            const ch = item?.channel ?? item;
+                            if (!ch?.id || seen.has(ch.id)) continue;
+                            // Only voice (2) and stage (13) channel types
+                            if (ch.type !== 2 && ch.type !== 13) continue;
+                            seen.add(ch.id);
+                            const cName: string = ch.name ?? "";
+                            out.push({
+                                channelId: ch.id,
+                                channelName: cName,
+                                channelType: ch.type ?? 2,
+                                guildId,
+                                guildName: gName,
+                                guildIcon: gIcon,
+                                memberCount: memberCount[ch.id] ?? 0,
+                                canAccess: true,
+                                searchIndex: `${cName.toLowerCase()} ${gName.toLowerCase()}`,
+                            });
+                        }
                     }
                 }
 

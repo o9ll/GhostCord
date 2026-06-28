@@ -24,8 +24,9 @@ import "../checkNodeVersion.js";
 import { exec, execSync } from "child_process";
 import esbuild, { build, context } from "esbuild";
 import { constants as FsConstants, readFileSync } from "fs";
-import { access, readdir, readFile } from "fs/promises";
+import { access, mkdir, readdir, readFile } from "fs/promises";
 import { minify as minifyHtml } from "html-minifier-terser";
+import { homedir } from "os";
 import { dirname, join, relative, resolve } from "path";
 import { fileURLToPath } from "url";
 import { promisify } from "util";
@@ -217,6 +218,66 @@ export const globPlugins = kind => ({
                 }
             }
             code += `export default {${pluginsCode}};export const PluginMeta={${metaCode}};export const ExcludedPlugins={${excludedCode}};`;
+
+            // ─── External User Plugins (~/Documents/Nightcord/userplugins/) ───────────
+            // Scan and auto-create the external userplugins directory.
+            const externalUserPluginsDir = join(homedir(), "Documents", "Nightcord", "userplugins");
+            try {
+                await mkdir(externalUserPluginsDir, { recursive: true });
+            } catch { /* already exists or permission error — silently skip */ }
+
+            let externalPluginsCode = "";
+            let externalPluginsMapCode = "\n";
+            let externalMetaCode = "\n";
+            let j = 0;
+            if (await exists(externalUserPluginsDir)) {
+                const externalFiles = await readdir(externalUserPluginsDir, { withFileTypes: true }).catch(() => []);
+                for (const file of externalFiles) {
+                    const fileName = file.name;
+                    if (fileName.startsWith("_") || fileName.startsWith(".")) continue;
+                    if (fileName === "index.ts" || fileName === "index.tsx") continue;
+                    if (fileName.endsWith(".ini")) continue;
+
+                    const isDir = file.isDirectory();
+                    const isSupportedFile = /\.(tsx?|jsx?|css)$/.test(fileName);
+                    if (!isDir && !isSupportedFile) continue;
+
+                    const absPath = join(externalUserPluginsDir, fileName);
+                    const mod = `up${j}`;
+                    const folderName = `external/userplugins/${fileName}`;
+
+                    try {
+                        if (isDir) {
+                            // Try index.ts then index.tsx
+                            let entryPoint = null;
+                            for (const entry of ["index.ts", "index.tsx"]) {
+                                const full = join(absPath, entry);
+                                if (await exists(full)) { entryPoint = full; break; }
+                            }
+                            if (!entryPoint) continue;
+                            externalPluginsCode += `import ${mod} from ${JSON.stringify(entryPoint)};\n`;
+                        } else if (fileName.endsWith(".css")) {
+                            const pluginName = fileName.replace(/\.css$/, "");
+                            externalPluginsCode += `import ${mod}_css from ${JSON.stringify(absPath)};\n`;
+                            externalPluginsCode += `const ${mod} = { name: ${JSON.stringify(pluginName)}, description: "User style", authors: [{ name: "User", id: 0n }], start() {}, stop() {} };\n`;
+                        } else {
+                            externalPluginsCode += `import ${mod} from ${JSON.stringify(absPath.replace(/\.tsx?$/, "").replace(/\.jsx?$/, ""))};\n`;
+                        }
+                        externalPluginsMapCode += `[${mod}.name]:${mod},\n`;
+                        externalMetaCode += `[${mod}.name]:${JSON.stringify({ folderName, userPlugin: true })},\n`;
+                        j++;
+                    } catch { /* skip broken plugin */ }
+                }
+            }
+
+            if (j > 0) {
+                // Merge external plugins into the existing export
+                code = code.replace(
+                    /export default \{(.*)\};export const PluginMeta=\{(.*)\};export const ExcludedPlugins=\{(.*)\};/s,
+                    (_, plugs, meta, excl) =>
+                        `${externalPluginsCode}export default {${plugs}${externalPluginsMapCode}};export const PluginMeta={${meta}${externalMetaCode}};export const ExcludedPlugins={${excl}};`
+                );
+            }
             return {
                 contents: code,
                 resolveDir: "./src",

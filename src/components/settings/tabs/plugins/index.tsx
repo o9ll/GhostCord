@@ -35,7 +35,7 @@ import { isTruthy } from "@utils/guards";
 import { Logger } from "@utils/Logger";
 import { Margins } from "@utils/margins";
 import { classes } from "@utils/misc";
-import { relaunch } from "@utils/native";
+import { relaunch, showItemInFolder } from "@utils/native";
 import { useAwaiter } from "@utils/react";
 import { Alerts, lodash, Parser, React, SearchableSelect, Select as DiscordSelect, TextInput, Toasts, Tooltip, useCallback, useMemo, useState } from "@webpack/common";
 import { JSX } from "react";
@@ -60,9 +60,14 @@ function VencordEquicordTabIcon() {
     return <img src={VENCORD_EQUICORD_TAB_ICON} alt="Vencord & Equicord" style={{ width: 18, height: 18, borderRadius: 4 }} />;
 }
 
+function UserPluginsTabIcon() {
+    return <img src="https://equicord.org/assets/icons/misc/userplugin.png" alt="User Plugins" style={{ width: 18, height: 18, borderRadius: 4 }} />;
+}
+
 const categoryOptions = [
     { label: "Vencord & Equicord", value: SearchStatus.OTHERS },
     { label: "Nightcord", value: SearchStatus.NIGHTCORD },
+    { label: "User Plugins", value: SearchStatus.USER_PLUGINS },
     { label: "Community Plugins", value: "community", disabled: true }
 ];
 export const cl = classNameFactory("vc-plugins-");
@@ -688,9 +693,28 @@ export default function PluginSettings({ premiumOnly = false }: PluginSettingsPr
                                 </div>
                             </div>
                         </div>
-                        <div className={cl("stat-item")}>
-                            <div className={cl("stat-title")}>{t("NIGHTCORD PLUGINS")}</div>
-                            <div className={cl("stat-value")}>{totalNightcordPlugins}</div>
+                        <div 
+                            className={cl("stat-item")} 
+                            style={searchValue.status === SearchStatus.USER_PLUGINS ? { cursor: "pointer", transition: "0.2s" } : {}}
+                            onClick={() => {
+                                if (searchValue.status !== SearchStatus.USER_PLUGINS) return;
+                                const native = (window as any).DiscordNative || (window as any).VesktopNative;
+                                if (native?.process?.env) {
+                                    const home = native.process.env.USERPROFILE || native.process.env.HOME;
+                                    if (home) {
+                                        // Open the directory itself (will open its parent and highlight it)
+                                        showItemInFolder(`${home}/Documents/Nightcord/userplugins`);
+                                    }
+                                }
+                            }}
+                            title={searchValue.status === SearchStatus.USER_PLUGINS ? "Click to open folder" : ""}
+                        >
+                            <div className={cl("stat-title")}>
+                                {searchValue.status === SearchStatus.USER_PLUGINS ? t("USER PLUGINS") : t("NIGHTCORD PLUGINS")}
+                            </div>
+                            <div className={cl("stat-value")}>
+                                {searchValue.status === SearchStatus.USER_PLUGINS ? totalUserPlugins : totalNightcordPlugins}
+                            </div>
                         </div>
                     </div>
                 )}
@@ -711,6 +735,7 @@ export default function PluginSettings({ premiumOnly = false }: PluginSettingsPr
                             renderOptionPrefix={(o: any) => {
                                 if (o?.value === SearchStatus.NIGHTCORD) return <NightcordTabIcon />;
                                 if (o?.value === SearchStatus.OTHERS) return <VencordEquicordTabIcon />;
+                                if (o?.value === SearchStatus.USER_PLUGINS) return <UserPluginsTabIcon />;
                                 return null;
                             }}
                         />
@@ -746,14 +771,36 @@ export default function PluginSettings({ premiumOnly = false }: PluginSettingsPr
                         </div>
                     )}
 
-                    {(searchValue.status !== SearchStatus.NIGHTCORD && searchValue.status !== SearchStatus.OTHERS) && (
+                    {searchValue.status === SearchStatus.USER_PLUGINS && (
+                        <>
+                            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12, padding: "8px 0" }}>
+                                <UserPluginsTabIcon />
+                                <span style={{ color: "var(--header-primary)", fontWeight: 600, fontSize: 14 }}>
+                                    User Plugins — from your local folder
+                                </span>
+                            </div>
+                            {nightcordPlugins.length > 0 || othersVisible.length > 0 ? (
+                                <div className={cl("grid")}>
+                                    {[...nightcordPlugins, ...othersVisible]}
+                                </div>
+                            ) : (
+                                <div style={{ textAlign: "center", padding: "48px 16px", color: "var(--text-muted)" }}>
+                                    <div style={{ fontSize: 32, marginBottom: 12 }}>📁</div>
+                                    <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 8 }}>No user plugins found</div>
+                                    <div style={{ fontSize: 13 }}>Add .tsx files to your <code>Documents/Nightcord/userplugins/</code> folder and rebuild.</div>
+                                </div>
+                            )}
+                        </>
+                    )}
+
+                    {(searchValue.status !== SearchStatus.NIGHTCORD && searchValue.status !== SearchStatus.OTHERS && searchValue.status !== SearchStatus.USER_PLUGINS) && (
                         <div className={cl("grid")}>
                             {nightcordPlugins}
                             {othersVisible}
                         </div>
                     )}
 
-                    {nightcordData.length === 0 && othersData.length === 0 && (
+                    {nightcordData.length === 0 && othersData.length === 0 && searchValue.status !== SearchStatus.USER_PLUGINS && (
                         <ExcludedPluginsList search={search} />
                     )}
 

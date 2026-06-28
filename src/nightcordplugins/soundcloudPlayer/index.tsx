@@ -9,9 +9,10 @@ import "./styles.css";
 import { HeaderBarButton } from "@api/HeaderBar";
 import { DataStore } from "@api/index";
 import { EquicordDevs } from "@utils/constants";
-import { ModalRoot, ModalSize,openModal } from "@utils/modal";
-import definePlugin, { IconComponent, PluginNative } from "@utils/types";
-import { MediaEngineStore,React, Select, useEffect, useRef, useState } from "@webpack/common";
+import { ModalRoot, ModalSize, openModal } from "@utils/modal";
+import { definePluginSettings } from "@api/Settings";
+import definePlugin, { IconComponent, OptionType, PluginNative } from "@utils/types";
+import { ApplicationAssetUtils, MediaEngineStore, React, ReactDOM, createRoot, Select, useEffect, useRef, useState, FluxDispatcher } from "@webpack/common";
 import { t } from "../autoTranslateNightcord";
 
 // ─── Native (IPC → main process) ─────────────────────────────────────────────
@@ -195,6 +196,22 @@ async function refreshTrackData(track: ScTrack, clientId: string): Promise<ScTra
         console.error(`[SoundCord] Failed to refresh track ${track.id}:`, e);
     }
     return track;
+}
+
+async function playTrackById(trackId: string) {
+    try {
+        const p = playerState;
+        const clientId = await fetchClientId();
+        const json = await Native.resolveTrack(trackId, clientId);
+        if (!json) throw new Error("Track not found");
+        const tracks = parseTracks({ collection: [JSON.parse(json)] });
+        if (tracks.length === 0) throw new Error("Invalid track data");
+        
+        playerPlayTrack(tracks[0], -1);
+    } catch (e: any) {
+        playerState.status = `❌ Failed to load track: ${e.message}`;
+        playerState.notify();
+    }
 }
 
 // ─── Favorites ──────────────────────────────────────────────────────────────────
@@ -413,17 +430,17 @@ function IconSearch() {
 function IconHeart({ filled }: { filled: boolean; }) {
     return <svg width={14} height={14} viewBox="0 0 24 24" fill={filled ? "currentColor" : "none"} stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" /></svg>;
 }
-function IconPlay({ size = 14 }: { size?: number; }) {
-    return <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>;
+function IconPlay({ size = 18 }: { size?: number; }) {
+    return <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor"><path d="M6 4l14 8-14 8V4z" /></svg>;
 }
-function IconPause() {
-    return <svg width={16} height={16} viewBox="0 0 24 24" fill="currentColor"><rect x={6} y={4} width={4} height={16} /><rect x={14} y={4} width={4} height={16} /></svg>;
+function IconPause({ size = 18 }: { size?: number; }) {
+    return <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor"><rect x={6} y={4} width={4} height={16} rx={1} /><rect x={14} y={4} width={4} height={16} rx={1} /></svg>;
 }
-function IconPrev() {
-    return <svg width={16} height={16} viewBox="0 0 24 24" fill="currentColor"><polygon points="19,20 9,12 19,4" /><rect x={5} y={4} width={3} height={16} /></svg>;
+function IconPrev({ size = 18 }: { size?: number; }) {
+    return <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor"><path d="M11 12l9-7v14l-9-7zM2 12l9-7v14l-9-7z" /></svg>;
 }
-function IconNext() {
-    return <svg width={16} height={16} viewBox="0 0 24 24" fill="currentColor"><polygon points="5,4 15,12 5,20" /><rect x={16} y={4} width={3} height={16} /></svg>;
+function IconNext({ size = 18 }: { size?: number; }) {
+    return <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor"><path d="M13 12l-9 7V5l9 7zM22 12l-9 7V5l9 7z" /></svg>;
 }
 function IconStop() {
     return <svg width={15} height={15} viewBox="0 0 24 24" fill="currentColor"><rect x={4} y={4} width={16} height={16} rx={2} /></svg>;
@@ -749,6 +766,86 @@ function cleanupThumbar() {
     } catch { }
 }
 
+// ─── Dynamic Island Player ────────────────────────────────────────────────────
+
+function DynamicIslandPlayer() {
+    const p = usePlayerState();
+    const [isHovered, setIsHovered] = useState(false);
+    
+    // Hide when nothing is loaded, or if the user disabled the popup in settings
+    if (!settings.store.showPopup || !p.playing) return null;
+
+    const isHidden = !p.isPlaying && !isHovered;
+
+    function togglePause(e: React.MouseEvent) {
+        e.stopPropagation();
+        if (!p.audio) return;
+        if (p.isPlaying) { p.audio.pause(); p.isPlaying = false; p.notify(); }
+        else { p.audio.play(); p.isPlaying = true; p.notify(); }
+    }
+
+    function navFav(dir: 1 | -1, e: React.MouseEvent) {
+        e.stopPropagation();
+        const base = p.favIndex >= 0 ? p.favIndex : (dir > 0 ? -1 : p.favorites.length);
+        playerPlayFavAt(((base + dir) % p.favorites.length + p.favorites.length) % p.favorites.length);
+    }
+
+    return (
+        <div 
+            className={`sc-dynamic-island sc-pos-${settings.store.position || 'top'} ${isHidden ? 'sc-island-hidden' : ''} ${isHovered ? 'sc-island-hover' : ''}`}
+            onMouseEnter={() => setIsHovered(true)}
+            onMouseLeave={() => setIsHovered(false)}
+            onClick={() => {
+                 openModal(props => (
+                     <ModalRoot {...props} size={ModalSize.SMALL}>
+                         <SoundCloudModal onClose={props.onClose} />
+                     </ModalRoot>
+                 ));
+            }}
+        >
+            <div className="sc-island-main">
+                <img 
+                    className={`sc-island-artwork ${!p.isPlaying ? 'sc-paused' : ''}`} 
+                    src={p.playing.artworkUrl || ""} 
+                    alt="" 
+                />
+                
+                <div className="sc-island-info">
+                    <div className="sc-island-title">{p.playing.title}</div>
+                    <div className="sc-island-artist">{p.playing.artist}</div>
+                </div>
+
+                <div className={`sc-island-wave ${!p.isPlaying ? 'sc-wave-paused' : ''} ${isHovered ? 'sc-wave-hide' : ''}`}>
+                    <span/><span/><span/><span/>
+                </div>
+            </div>
+
+            <div className="sc-island-expanded" onClick={e => e.stopPropagation()}>
+                <div className="sc-island-progress-row">
+                    <span className="sc-island-time">{fmtDuration(p.position * 1000)}</span>
+                    <input type="range" min={0} max={1000} value={p.progress * 1000 || 0}
+                        className="sc-island-slider"
+                        style={{ '--sc-progress': `${(p.progress || 0) * 100}%` } as React.CSSProperties}
+                        onChange={e => {
+                            const frac = Number(e.currentTarget.value) / 1000;
+                            if (p.audio) p.audio.currentTime = frac * (p.audio.duration || 0);
+                            p.progress = frac; p.notify();
+                        }} />
+                    <span className="sc-island-time">-{fmtDuration((p.duration - p.position) * 1000)}</span>
+                </div>
+                
+                <div className="sc-island-controls-row">
+                    <button className="sc-island-btn" onClick={e => navFav(-1, e)}><IconPrev size={20} /></button>
+                    <button className="sc-island-btn sc-island-btn-play" onClick={togglePause}>
+                        {p.isPlaying ? <IconPause size={24} /> : <IconPlay size={24} />}
+                    </button>
+                    <button className="sc-island-btn" onClick={e => navFav(+1, e)}><IconNext size={20} /></button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
 // ─── Bouton HeaderBar ─────────────────────────────────────────────────────────
 
 function SCHeaderBarButton() {
@@ -766,14 +863,142 @@ function SCHeaderBarButton() {
     );
 }
 
+let islandContainer: HTMLDivElement | null = null;
+let islandRoot: any = null;
+
+// ─── Rich Presence ───────────────────────────────────────────────────────────────────
+
+const RPC_SOCKET_ID = "SoundCordPlayer";
+const RPC_APP_ID = "1108588077900898414"; // Shared Discord music app ID
+
+let _rpcLastTitle = "";
+let _rpcLastPlaying = false;
+let _rpcThrottleTimer: ReturnType<typeof setTimeout> | null = null;
+
+function updateRichPresence() {
+    const p = playerState;
+    const nowTitle = p.playing?.title ?? "";
+    const nowPlaying = !!p.playing && p.isPlaying;
+
+    // Always react immediately to state changes (play/pause/stop/track switch)
+    if (nowTitle !== _rpcLastTitle || nowPlaying !== _rpcLastPlaying) {
+        if (_rpcThrottleTimer) { clearTimeout(_rpcThrottleTimer); _rpcThrottleTimer = null; }
+        _doUpdateRichPresence();
+        return;
+    }
+
+    // Throttle progress updates to avoid spamming Discord
+    if (_rpcThrottleTimer) return;
+    _rpcThrottleTimer = setTimeout(() => {
+        _rpcThrottleTimer = null;
+        _doUpdateRichPresence();
+    }, 5000);
+}
+
+async function _doUpdateRichPresence() {
+    try {
+        if (!settings.store.richPresence) {
+            clearRichPresence();
+            _rpcLastTitle = ""; _rpcLastPlaying = false;
+            return;
+        }
+        const p = playerState;
+        if (!p.playing || !p.isPlaying) {
+            clearRichPresence();
+            _rpcLastTitle = ""; _rpcLastPlaying = false;
+            return;
+        }
+
+        _rpcLastTitle = p.playing.title ?? "";
+        _rpcLastPlaying = true;
+
+        const now = Date.now();
+        const elapsed = Math.floor(p.position * 1000);
+        const start = now - elapsed;
+        const duration = Math.floor(p.duration * 1000);
+        const end = start + duration;
+
+        // Use ApplicationAssetUtils to proxy the artwork URL through Discord (same as lastfmRichPresence)
+        let large_image: string | undefined;
+        if (p.playing.artworkUrl) {
+            try {
+                large_image = (await ApplicationAssetUtils.fetchAssetIds(RPC_APP_ID, [p.playing.artworkUrl]))[0];
+            } catch {
+                large_image = undefined;
+            }
+        }
+
+        FluxDispatcher.dispatch({
+            type: "LOCAL_ACTIVITY_UPDATE",
+            socketId: RPC_SOCKET_ID,
+            activity: {
+                application_id: RPC_APP_ID,
+                name: "SoundCord",
+                details: p.playing.title || "Unknown track",
+                state: p.playing.artist || undefined,
+                type: 2, // LISTENING
+                timestamps: duration > 0 ? { start, end } : { start },
+                assets: large_image ? { large_image } : undefined,
+                buttons: ["Listening Together", "Download"],
+                metadata: {
+                    button_urls: [`https://nightcord.st/listen?sc_id=${p.playing.id}`, "https://nightcord.st"],
+                },
+                flags: 1,
+            }
+        });
+    } catch { }
+}
+
+function clearRichPresence() {
+    try {
+        _rpcLastTitle = ""; _rpcLastPlaying = false;
+        if (_rpcThrottleTimer) { clearTimeout(_rpcThrottleTimer); _rpcThrottleTimer = null; }
+        FluxDispatcher.dispatch({
+            type: "LOCAL_ACTIVITY_UPDATE",
+            socketId: RPC_SOCKET_ID,
+            activity: null,
+        });
+    } catch { }
+}
+
+let rpcListener: (() => void) | null = null;
+
+function handleListeningTogetherEvent(e: any) {
+    const scId = e.detail?.scId;
+    if (scId) playTrackById(scId);
+}
+
 // ─── Plugin ───────────────────────────────────────────────────────────────────
+
+const settings = definePluginSettings({
+    position: {
+        type: OptionType.SELECT,
+        description: "Popup Position",
+        options: [
+            { label: "Top Center (Dynamic Island)", value: "top" },
+            { label: "Bottom Right", value: "bottom" },
+        ],
+        default: "top",
+    },
+    showPopup: {
+        type: OptionType.BOOLEAN,
+        description: "Show Dynamic Island player",
+        default: true,
+    },
+    richPresence: {
+        type: OptionType.BOOLEAN,
+        description: "Show listening activity status (like Spotify)",
+        default: true,
+    },
+});
 
 export default definePlugin({
     name: "SoundCordPlayer",
     enabledByDefault: true,
     description: "Integrated SoundCord player. Client ID is automatically fetched via native Electron process — no account required.",
     authors: [EquicordDevs.nobody],
-
+    settings,
+    
     toolboxActions: {
         "Open SoundCord"() {
             openModal(props => (
@@ -793,13 +1018,55 @@ export default definePlugin({
     get clientId() { return playerState.clientId; },
 
     start() {
+        Native.installListeningTogetherIntercept().catch(() => {});
         fetchClientId().catch(() => { });
         initThumbar();
+
+        window.addEventListener("soundcord-listen-together", handleListeningTogetherEvent);
+
+        // Force clear any stuck activity from previous sessions on startup
+        clearRichPresence();
+
+        // Wire Rich Presence to player state changes
+        rpcListener = () => updateRichPresence();
+        playerState.subscribe(rpcListener);
+
+        islandContainer = document.createElement("div");
+        document.body.appendChild(islandContainer);
+        
+        if (typeof createRoot === "function") {
+            islandRoot = createRoot(islandContainer);
+            islandRoot.render(<DynamicIslandPlayer />);
+        } else if (ReactDOM?.createRoot) {
+            islandRoot = ReactDOM.createRoot(islandContainer);
+            islandRoot.render(<DynamicIslandPlayer />);
+        } else if (ReactDOM?.render) {
+            ReactDOM.render(<DynamicIslandPlayer />, islandContainer);
+        }
     },
 
     stop() {
+        window.removeEventListener("soundcord-listen-together", handleListeningTogetherEvent);
         cleanupThumbar();
         playerStop();
+
+        // Unsubscribe RPC listener and clear activity
+        if (rpcListener) {
+            playerState.unsubscribe(rpcListener);
+            rpcListener = null;
+        }
+        clearRichPresence();
+        
+        if (islandContainer) {
+            if (islandRoot) {
+                islandRoot.unmount();
+                islandRoot = null;
+            } else if (ReactDOM?.unmountComponentAtNode) {
+                ReactDOM.unmountComponentAtNode(islandContainer);
+            }
+            islandContainer.remove();
+            islandContainer = null;
+        }
         playerInited = false;
     },
 });

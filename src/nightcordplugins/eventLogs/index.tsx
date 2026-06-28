@@ -590,6 +590,8 @@ function LogsIconWithBadge({ width = 20, height = 20, count = 0 }) {
 function LogsButton() {
     const [count, setCount] = useState(logs.length);
     const [notif, setNotif] = useState(unreadLogEntries.size);
+    const [modalOpen, setModalOpen] = useState(false);
+    const btnRef = React.useRef<any>(null);
 
     useEffect(() => {
         const fn = () => { setCount(logs.length); setNotif(unreadLogEntries.size); };
@@ -597,17 +599,26 @@ function LogsButton() {
         return () => { updateListeners.delete(fn); };
     }, []);
 
-    const onClick = () => {
+    const onClick = (e: React.MouseEvent) => {
+        // Dispatch a synthetic mouseleave so Discord's Tooltip dismisses itself
+        const el = (e.currentTarget as HTMLElement);
+        el.dispatchEvent(new MouseEvent("mouseleave", { bubbles: true }));
+        el.dispatchEvent(new MouseEvent("mouseout", { bubbles: true }));
+
         unreadLogEntries.clear();
         globalVersion++;
         for (const fn of updateListeners) { try { fn(); } catch { } }
-        openModal(props => <LogsModal rootProps={props} />);
+
+        setModalOpen(true);
+        openModal(props => <LogsModal rootProps={{ ...props, onClose: () => { props.onClose(); setModalOpen(false); } }} />);
     };
 
     return (
         <HeaderBarButton
+            ref={btnRef}
             icon={() => <LogsIconWithBadge count={notif} />}
-            tooltip={`${t("Logs")} (${count})`}
+            tooltip={modalOpen ? null : `${t("Logs")} (${count})`}
+            selected={modalOpen}
             onClick={onClick}
         />
     );

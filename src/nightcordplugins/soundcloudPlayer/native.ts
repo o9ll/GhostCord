@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-import { IpcMainInvokeEvent, net } from "electron";
+import { BrowserWindow, IpcMainInvokeEvent, ipcMain, net } from "electron";
 
 // ─── Fetch via net.fetch d'Electron ──────────────────────────────────────────
 
@@ -138,4 +138,51 @@ export async function resolveTrack(
     } catch (e: any) {
         throw new Error(e?.message ?? String(e));
     }
+}
+
+// ─── Listening Together ─────────────────────────────────────────────────────────────────
+// When someone clicks "Listening Together" button on Discord, it tries to open
+// https://nightcord.st/listen?sc_id=TRACK_ID in the browser.
+// We intercept that before it leaves Discord and emit an IPC event to the renderer.
+
+const LISTEN_URL_PREFIX = "https://nightcord.st/listen?";
+
+export function setupListeningTogetherHandler(_: IpcMainInvokeEvent): void {
+    // no-op: real setup happens at plugin start via setupListeningTogther()
+}
+
+let _listenerInstalled = false;
+
+export function installListeningTogetherIntercept(_: IpcMainInvokeEvent): void {
+    if (_listenerInstalled) return;
+    _listenerInstalled = true;
+
+    // Hook all existing and future BrowserWindows
+    const hook = (win: Electron.BrowserWindow) => {
+        const origHandler = win.webContents.getWindowOpenHandler?.();
+        win.webContents.setWindowOpenHandler(details => {
+            if (details.url.startsWith(LISTEN_URL_PREFIX)) {
+                try {
+                    const params = new URL(details.url).searchParams;
+                    const scId = params.get("sc_id") ?? "";
+                    const scUrl = params.get("sc_url") ?? "";
+                    // Send to all renderer windows via CustomEvent
+                    // Security: use JSON.stringify to safely escape scId and prevent XSS injection
+                    BrowserWindow.getAllWindows().forEach(w => {
+                        try { 
+                            const safeId = JSON.stringify(scId);
+                            w.webContents.executeJavaScript(`window.dispatchEvent(new CustomEvent('soundcord-listen-together', { detail: { scId: ${safeId} } }))`).catch(() => {});
+                        } catch { }
+                    });
+                } catch { }
+                return { action: "deny" };
+            }
+            // Fall through to original handler
+            if (origHandler) return origHandler(details);
+            return { action: "deny" };
+        });
+    };
+
+    BrowserWindow.getAllWindows().forEach(hook);
+    (require("electron") as typeof import("electron")).app.on("browser-window-created" as any, (_e: any, win: Electron.BrowserWindow) => hook(win));
 }

@@ -8,7 +8,7 @@ import { ChatBarButton, ChatBarButtonFactory } from "@api/ChatButtons";
 import { addContextMenuPatch, removeContextMenuPatch } from "@api/ContextMenu";
 import definePlugin from "@utils/types";
 import type { Message } from "@vencord/discord-types";
-import { Menu, Parser, React,Toasts, useEffect, useState } from "@webpack/common";
+import { Menu, Parser, React, Toasts, useEffect, useState, MessageStore, SelectedChannelStore } from "@webpack/common";
 import { t } from "../autoTranslateNightcord";
 
 const MARKER = "\u200B\u200C\u200D";
@@ -289,6 +289,49 @@ const messageContextPatch = (children: any, { message }: { message: any; }) => {
     }
 };
 
+const userContextPatch = (children: any) => {
+    if (!children || !Array.isArray(children)) return;
+    try {
+        if (!encryptionEnabled) return;
+        const channelId = SelectedChannelStore.getChannelId();
+        if (!channelId) return;
+
+        // On cherche le bon endroit pour insérer le menu (à la fin généralement)
+        children.push(
+            <Menu.MenuGroup key="nc-encryption-user-group">
+                <Menu.MenuItem
+                    id="nc-decrypt-all"
+                    label={`🔓 ${t("Decrypt all")}`}
+                    action={() => {
+                        const msgs = MessageStore.getMessages(channelId)?._array;
+                        if (!msgs) return;
+                        let count = 0;
+                        for (const m of msgs) {
+                            if (!m.content || !isEncrypted(m.content)) continue;
+                            const setter = DecryptionSetters.get(m.id);
+                            if (setter) {
+                                // Si on a déjà un setter (le composant est rendu)
+                                const found = autoDecrypt(m.content);
+                                if (found !== null) {
+                                    setter(found.text);
+                                    count++;
+                                }
+                            }
+                        }
+                        if (count > 0) {
+                            Toasts.show({ message: `🔓 Decrypted ${count} messages`, type: Toasts.Type.SUCCESS, id: Toasts.genId() });
+                        } else {
+                            Toasts.show({ message: "❌ No encrypted messages found on screen", type: Toasts.Type.FAILURE, id: Toasts.genId() });
+                        }
+                    }}
+                />
+            </Menu.MenuGroup>
+        );
+    } catch (e) {
+        console.error("[EncryptedMessage] userContext patch error:", e);
+    }
+};
+
 export default definePlugin({
     name: "EncryptedMessage",
     enabledByDefault: true,
@@ -305,10 +348,12 @@ export default definePlugin({
 
     start() {
         addContextMenuPatch("message", messageContextPatch);
+        addContextMenuPatch("user-context", userContextPatch);
     },
 
     stop() {
         removeContextMenuPatch("message", messageContextPatch);
+        removeContextMenuPatch("user-context", userContextPatch);
         encryptionEnabled = false;
     },
 
