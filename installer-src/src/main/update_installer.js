@@ -13,7 +13,7 @@ const getJSON = phin.defaults({
 
 /* eslint-disable no-console */
 export default async function () {
-    const downloadUrl = `https://gitea.${domain}/api/v1/repos/nightcord/nightcord/releases/latest`;
+    const downloadUrl = `https://source.${domain}/api/v1/repos/nightcord/nightcord/releases/latest`;
     console.info(`Nightcord Installer ${version}`);
 
     try {

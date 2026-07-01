@@ -7,7 +7,7 @@
 
 [![Discord](https://img.shields.io/badge/Discord-Join%20us-5865F2?logo=discord\&logoColor=white)](https://discord.gg/nightcord)
 [![License](https://img.shields.io/badge/license-GPL%20v3-a855f7)](./LICENSE)
-[![Platform](https://img.shields.io/badge/platform-Windows-3b82f6.svg?logo=windows\&logoColor=white)](https://gitea.nightcord.st/nightcord/nightcord)
+[![Platform](https://img.shields.io/badge/platform-Windows-3b82f6.svg?logo=windows\&logoColor=white)](https://source.nightcord.st/nightcord/nightcord)
 [![Website](https://img.shields.io/badge/website-nightcord.st-5865F2?logo=googlechrome\&logoColor=white)](https://nightcord.st)
 
 ---
@@ -51,7 +51,7 @@ npm install -g pnpm
 ### Clone & Build
 
 ```bash
-git clone https://gitea.nightcord.st/nightcord/nightcord.git
+git clone https://source.nightcord.st/nightcord/nightcord.git
 cd nightcord
 pnpm install
 pnpm build
@@ -75,7 +75,7 @@ pnpm uninject
 
 Source code:
 
-https://gitea.nightcord.st/nightcord/nightcord
+https://source.nightcord.st/nightcord/nightcord
 
 ---
 

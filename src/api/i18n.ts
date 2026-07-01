@@ -201,8 +201,12 @@ const translations: Record<string, Partial<Record<Language, string>>> = {
     "Disable Nitro Theme": { fr: "Désactiver le thème Nitro", es: "Deshabilitar tema Nitro", ru: "Отключить тему Nitro", zh: "禁用 Nitro 主题" },
     
     // ── Extra vencord index translations ──────────────────────────────
-    "You can customize where this settings section appears in Discord's settings menu by configuring the": { fr: "Vous pouvez personnaliser où cette section...", es: "Puedes personalizar dónde aparece esta sección...", ru: "Вы можете настроить, где этот раздел настроек появляется...", zh: "您可以自定义此设置..." },
+    "You can customize where this settings section appears in Discord's settings menu by configuring the": { fr: "Vous pouvez personnaliser où cette section...", es: "Puedes personalizar dónde aparece cette section...", ru: "Вы можете настроить, где этот раздел настроек появляется...", zh: "您可以自定义此设置..." },
     "Settings Plugin": { fr: "Plugin de paramètres", es: "Plugin de ajustes", ru: "Плагин настроек", zh: "设置插件" },
+    
+    // ── Sidebar Tabs ──────────────────────────────────────────────────────────
+    "Synchronization": { fr: "Synchronisation", es: "Sincronización", ru: "Синхронизация", zh: "同步", ar: "مزامنة" },
+
 
     // ── Changelog Tab ────────────────────────────────────────────────────────
     "Fetch Changes": { fr: "Rechercher les modifications", es: "Buscar cambios", ru: "Получить изменения", zh: "获取更改" },

@@ -618,7 +618,7 @@ export default definePlugin({
             if (!isEnabled) return;
             if (fakeNicks.size === 0 && disconnectedUsers.size === 0 && kickedUsers.size === 0) return;
             if (_domTimer) return;
-            _domTimer = setTimeout(() => { _domTimer = null; if (isEnabled) this.applyDomOverrides(); }, 250);
+            _domTimer = setTimeout(() => { _domTimer = null; if (isEnabled) this.applyDomOverrides(); }, 1000);
         });
         this._domObserver.observe(document.body, { childList: true, subtree: true });
     },

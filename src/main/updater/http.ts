@@ -14,7 +14,7 @@ import { join } from "path";
 import {domain} from "../../../DOMAIN.json";
 import { serializeErrors } from "./common";
 
-const GITEA_BASE     = `https://gitea.${domain}`;
+const GITEA_BASE     = `https://source.${domain}`;
 const API_BASE      = `${GITEA_BASE}/api/v1/repos/nightcord/nightcord`;
 const REPO_URL      = `${GITEA_BASE}/nightcord/nightcord`;
 declare const VERSION: string;

@@ -32,11 +32,19 @@ const settings = definePluginSettings({
 
 const STORAGE_PREFIX = "nightcord_lastseen_";
 
+const lastWrittenCache = new Map<string, number>();
+
 function setLastSeen(userId: string, ts: number) {
     try {
-        DataStore.set(STORAGE_PREFIX + userId, ts).catch(() => {});
-        if (userId === "1462402007305425039" || userId === "1097178374809587835") {
-            console.log(`[LastSeen DEBUG] SAVED TIMESTAMP FOR ${userId} ->`, new Date(ts).toLocaleTimeString());
+        const lastWritten = lastWrittenCache.get(userId) || 0;
+        // Only write to IndexedDB if it's been more than 60 seconds since the last write for this user
+        if (ts - lastWritten > 60000) {
+            lastWrittenCache.set(userId, ts);
+            DataStore.set(STORAGE_PREFIX + userId, ts).catch(() => {});
+            
+            if (userId === "1462402007305425039" || userId === "1097178374809587835") {
+                console.log(`[LastSeen DEBUG] SAVED TIMESTAMP FOR ${userId} ->`, new Date(ts).toLocaleTimeString());
+            }
         }
     } catch (e) {
         console.error(`[LastSeen ERROR] Failed to save timestamp for ${userId}:`, e);

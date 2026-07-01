@@ -20,7 +20,7 @@ fi
 [[ -z "$NOTES" ]] && NOTES="Nightcord $VERSION"
 
 # ── Config Gitea ──────────────────────────────────────────────────────────────
-GITEA_URL="https://gitea.nightcord.st"
+GITEA_URL="https://source.nightcord.st"
 GITEA_REPO="nightcord/nightcord"
 GITEA_API="$GITEA_URL/api/v1"
 

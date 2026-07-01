@@ -97,21 +97,24 @@ let globalVersion = 0;
 const updateListeners = new Set<() => void>();
 
 let flushTimer: ReturnType<typeof setTimeout> | null = null;
+let saveTimer: ReturnType<typeof setTimeout> | null = null;
+
 function scheduleFlush() {
     if (flushTimer !== null) return;
-    // FIX CRASH DM SCROLL: debounce augmenté de 50ms → 500ms
-    // Un flush à 50ms pendant le scroll DM déclenchait un globalVersion++ à chaque
-    // batch LOAD_MESSAGES_SUCCESS, forçant un re-render React en plein milieu de la
-    // virtualisation DOM de Discord → removeChild crash (node not a child of this node).
-    // 500ms laisse le temps au scroll de se stabiliser avant de notifier les listeners.
     flushTimer = setTimeout(() => {
         flushTimer = null;
         globalVersion++;
-        // Notification immédiate pour les listeners
         for (const fn of updateListeners) {
             try { fn(); } catch { }
         }
-        savePersistLogs();
+        
+        // Debounce actual localStorage save to 5 seconds to avoid freezing
+        if (saveTimer === null) {
+            saveTimer = setTimeout(() => {
+                saveTimer = null;
+                savePersistLogs();
+            }, 5000);
+        }
     }, 500);
 }
 
@@ -801,7 +804,7 @@ function subscribeToEvents() {
 
 export default definePlugin({
     name: "EventLogs",
-    enabledByDefault: true,
+    enabledByDefault: false,
     description: "Logs: deleted/edited messages, voice, friends, servers.",
     authors: [{ name: "Nightcord", id: 0n }],
     dependencies: ["HeaderBarAPI"],

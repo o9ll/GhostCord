@@ -20,13 +20,14 @@ import "./fixDiscordBadgePadding.css";
 import {domain} from "../../../../DOMAIN.json"
 
 import { _getBadges, BadgePosition, BadgeUserArgs, ProfileBadge } from "@api/Badges";
+import { loadOwnHiddenBadgeSources } from "@api/BadgeVisibility";
 import ErrorBoundary from "@components/ErrorBoundary";
 import { Devs } from "@utils/constants";
 import { copyWithToast } from "@utils/discord";
 import { Logger } from "@utils/Logger";
 import { shouldShowContributorBadge, shouldShowEquicordContributorBadge } from "@utils/misc";
 import definePlugin from "@utils/types";
-import { ContextMenuApi, Menu, Toasts, UserStore } from "@webpack/common";
+import { ContextMenuApi, FluxDispatcher, Menu, Toasts, UserStore } from "@webpack/common";
 
 import Plugins, { PluginMeta } from "~plugins";
 
@@ -193,10 +194,27 @@ export default definePlugin({
 
         clearInterval(intervalId);
         intervalId = setInterval(loadAllBadges, 1000 * 60 * 30); // 30 minutes
+
+        // Charge la preference "badges caches" (locale + cloud) pour l'utilisateur courant.
+        // Sans cet appel, myHiddenSources reste vide en memoire a chaque redemarrage,
+        // meme si la sauvegarde existe deja dans localStorage/le cloud.
+        const currentUserId = UserStore.getCurrentUser()?.id;
+        if (currentUserId) {
+            loadOwnHiddenBadgeSources(currentUserId).catch(() => {});
+        }
+        FluxDispatcher.subscribe("CONNECTION_OPEN", this.onConnectionOpen);
+    },
+
+    onConnectionOpen() {
+        const currentUserId = UserStore.getCurrentUser()?.id;
+        if (currentUserId) {
+            loadOwnHiddenBadgeSources(currentUserId).catch(() => {});
+        }
     },
 
     async stop() {
         clearInterval(intervalId);
+        FluxDispatcher.unsubscribe("CONNECTION_OPEN", this.onConnectionOpen);
     },
 
     getBadges(profile: { userId: string; guildId: string; }) {

@@ -151,12 +151,19 @@ export default definePlugin({
                 count -= chunkCount;
                 RelationshipStore.emitChange();
                 if (count <= 0) {
-                    FluxDispatcher.unsubscribe("GUILD_MEMBERS_CHUNK_BATCH", callback);
+                    cleanup();
                 }
             } catch (e) {
                 new Logger("ImplicitRelationships").error("Error in GUILD_MEMBERS_CHUNK_BATCH handler", e);
             }
         };
+
+        const cleanup = () => {
+            FluxDispatcher.unsubscribe("GUILD_MEMBERS_CHUNK_BATCH", callback);
+        };
+        
+        // Safety timeout to prevent memory leak if chunks are lost or count mismatch
+        setTimeout(cleanup, 10000);
 
         FluxDispatcher.subscribe("GUILD_MEMBERS_CHUNK_BATCH", callback);
         for (let i = 0; i < toRequest.length; i += 100) {

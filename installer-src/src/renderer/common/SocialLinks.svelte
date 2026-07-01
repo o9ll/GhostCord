@@ -2,7 +2,7 @@
     import {tooltip} from "./tooltip";
     
     const telegramUrl = "https://t.me/nightcordoff";
-    const giteaUrl = "https://gitea.nightcord.st/nightcord/nightcord";
+    const giteaUrl = "https://source.nightcord.st/nightcord/nightcord";
     const webUrl = "https://nightcord.st";
 </script>
 

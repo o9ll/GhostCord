@@ -36,9 +36,9 @@ const LAST_SEEN_HASH_KEY = "EquicordChangelog_LastSeenHash";
 const KNOWN_PLUGINS_KEY = "EquicordChangelog_KnownPlugins";
 const KNOWN_SETTINGS_KEY = "EquicordChangelog_KnownSettings";
 const LAST_REPO_CHECK_KEY = "EquicordChangelog_LastRepoCheck";
-const GITEA_API_BASE = `https://gitea.${domain}/api/v1/repos`;
+const GITEA_API_BASE = `https://source.${domain}/api/v1/repos`;
 const NIGHTCORD_RELEASES_REPO = "nightcord/nightcord";
-const NIGHTCORD_REPO_URL = `https://gitea.${domain}/${NIGHTCORD_RELEASES_REPO}`;
+const NIGHTCORD_REPO_URL = `https://source.${domain}/${NIGHTCORD_RELEASES_REPO}`;
 
 type KnownPluginSettingsMap = Map<string, Set<string>>;
 

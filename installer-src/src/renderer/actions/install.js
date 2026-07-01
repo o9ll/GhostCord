@@ -18,7 +18,7 @@ const INJECT_SHIM_PROGRESS = 98;
 const RESTART_DISCORD_PROGRESS = 100;
 
 
-const RELEASE_API = `https://gitea.${domain}/api/v1/repos/nightcord/nightcord/releases/latest`;
+const RELEASE_API = `https://source.${domain}/api/v1/repos/nightcord/nightcord/releases/latest`;
 const DIST_ZIP = "nightcord-dist.zip";
 const distDir = path.join(process.env.LOCALAPPDATA, "Nightcord", "dist");
 
