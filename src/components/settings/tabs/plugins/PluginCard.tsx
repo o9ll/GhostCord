@@ -22,7 +22,7 @@ import { tPlugin } from "@api/pluginI18n";
 
 import { TUTORIAL_CACHE } from "./components/Common";
 import { openPluginModal } from "./PluginModal";
-import { TUTORIAL_PLUGIN_NAMES } from "./tutorialList";
+import { getTutorialVideoName, TUTORIAL_PLUGIN_NAMES } from "./tutorialList";
 import { PluginMeta } from "~plugins";
 
 const logger = new Logger("PluginCard");
@@ -128,7 +128,12 @@ export function PluginCard({ plugin, disabled, onRestartNeeded, onMouseEnter, on
 
     const openTutorialVideo = (e: React.MouseEvent) => {
         e.stopPropagation();
-        const videoUrl = `https://git.${domain}/nightcord/nightcord-tutorials/raw/branch/main/videos/${plugin.name}.mp4`;
+        // The video filename on disk does not always exactly match plugin.name
+        // (case differences, or a handful of fully different names), so resolve it
+        // through the mapping instead of assuming they are identical. Also always
+        // URL-encode the segment since some filenames contain spaces (e.g. "Fake Voice Option.mp4").
+        const videoName = getTutorialVideoName(plugin.name) ?? plugin.name;
+        const videoUrl = `https://git.${domain}/nightcord/nightcord-tutorials/raw/branch/main/videos/${encodeURIComponent(videoName)}.mp4`;
         openModal(props => (
             <ModalRoot {...props} size={ModalSize.DYNAMIC} className="nc-tutorial-modal">
                 <ModalHeader separator={false}>

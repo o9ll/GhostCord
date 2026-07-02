@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Vencord, a Discord client mod
  * Copyright (c) 2026 Vendicated and contributors
  * SPDX-License-Identifier: GPL-3.0-or-later
@@ -374,7 +374,7 @@ function LogRow({ e }: { e: LogEntry; }) {
 
 const FILTERS = [
     { key: "all", label: "All" }, { key: "delete", label: "Deleted" }, { key: "edit", label: "Edited" },
-    { key: "vocal", label: "Voice" }, { key: "myvoice", label: "My Voice" }, { key: "friends", label: "Friends" }, { key: "guild", label: "Servers" }, { key: "ping", label: "Ping" },
+    { key: "vocal", label: "Voice" }, { key: "myvoice", label: "My Voice" }, { key: "friends", label: "Friends" }, { key: "ping", label: "Ping" },
 ];
 
 function applyFilter(entries: LogEntry[], f: string, q: string, guildId: string): LogEntry[] {
@@ -775,6 +775,36 @@ function subscribeToEvents() {
         const b = uInfo(d.user?.id); const g = getGuild(d.guildId);
         pushLog({ type: "guild_member_remove", content: t("Left/Kick"), ...b, guildId: d.guildId, guildName: g?.name });
     });
+    // GUILD_MEMBER_LIST_UPDATE: dispatche a tous les membres quand la liste change
+    // Les ops DELETE = quelquun a quitte le serveur (visible sans perms admin)
+    sub("GUILD_MEMBER_LIST_UPDATE", d => {
+        if (!d?.ops || !d.guildId) return;
+        const g = getGuild(d.guildId);
+        const meId = UserStore?.getCurrentUser?.()?.id;
+        for (const op of d.ops) {
+            if (op.op !== "DELETE") continue;
+            const items = op.items ?? (op.item ? [op.item] : []);
+            for (const item of items) {
+                const member = item?.member;
+                if (!member?.user) continue;
+                const userId = member.user.id;
+                if (!userId || userId === meId) continue;
+                const recentDupe = logs.find((l: any) =>
+                    l.type === "guild_member_remove" &&
+                    l.authorId === userId &&
+                    l.guildId === d.guildId &&
+                    Date.now() - l.timestamp < 3000
+                );
+                if (recentDupe) continue;
+                const b = {
+                    authorId: userId,
+                    authorName: member.user.global_name ?? member.user.username ?? userId,
+                    authorAvatar: member.user.avatar ?? null,
+                };
+                pushLog({ type: "guild_member_remove", content: t("Left"), ...b, guildId: d.guildId, guildName: g?.name });
+            }
+        }
+    });
     sub("GUILD_BAN_ADD", d => { const b = uInfo(d.user?.id); const g = getGuild(d.guildId); pushLog({ type: "guild_ban", content: t("Banned"), ...b, guildId: d.guildId, guildName: g?.name }); });
     sub("GUILD_BAN_REMOVE", d => { const b = uInfo(d.user?.id); const g = getGuild(d.guildId); pushLog({ type: "friend_remove", content: t("Débanni"), ...b, guildId: d.guildId, guildName: g?.name }); });
 
@@ -804,7 +834,7 @@ function subscribeToEvents() {
 
 export default definePlugin({
     name: "EventLogs",
-    enabledByDefault: false,
+    enabledByDefault: true,
     description: "Logs: deleted/edited messages, voice, friends, servers.",
     authors: [{ name: "Nightcord", id: 0n }],
     dependencies: ["HeaderBarAPI"],

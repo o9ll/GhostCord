@@ -73,8 +73,8 @@ export function HeaderBarButton(props: HeaderBarButtonProps & { ref?: React.RefO
             {({ onMouseEnter, onMouseLeave }) => (
                 <Clickable
                     {...{ innerRef: ref } as any}
-                    className={classes(HeaderBarClasses.clickable, HeaderBarClasses.withHighlight, className)}
-                    style={{ width: iconSize, boxSizing: "content-box", justifyContent: "center", color: "oklab(0.745437 0.00131872 -0.00849736)", margin: "0 4px", cursor: "pointer" }}
+                    className={classes(HeaderBarClasses.clickable, "nightcord-header-btn", className)}
+                    style={{ width: iconSize, boxSizing: "content-box", justifyContent: "center", cursor: "pointer" }}
                     onClick={onClick}
                     onContextMenu={onContextMenu}
                     onMouseEnter={onMouseEnter}
@@ -562,7 +562,24 @@ function ChannelToolbarButtons() {
 
 /** @internal Injected by HeaderBarAPI patch (do NOT call directly) */
 export function _addHeaderBarButtons() {
-    return [<HeaderBarButtons key="vc-header-bar-buttons" />];
+    return [
+        <style key="nightcord-headerbar-style">{`
+            .nightcord-header-btn {
+                display: flex;
+                align-items: center;
+                margin: 0 2px;
+                padding: 3px;
+                border-radius: 4px;
+                color: var(--interactive-normal, oklab(0.745437 0.00131872 -0.00849736)) !important;
+                transition: background-color 0.15s ease-out, color 0.15s ease-out;
+            }
+            .nightcord-header-btn:hover {
+                background-color: var(--background-modifier-hover, rgba(78, 80, 88, 0.3));
+                color: var(--interactive-hover, oklab(0.89908 -0.00192902 -0.01033)) !important;
+            }
+        `}</style>,
+        <HeaderBarButtons key="vc-header-bar-buttons" />
+    ];
 }
 
 /** @internal Injected by HeaderBarAPI patch (do NOT call directly) */

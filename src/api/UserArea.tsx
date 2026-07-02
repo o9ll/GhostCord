@@ -78,15 +78,30 @@ function UserAreaButtons({ props }: { props: UserAreaRenderProps; }) {
     if (isStealthModeEnabled()) return null;
 
     return (
-        <div className="vc-user-area-btns" style={{ display: "contents" }}>
-            {Array.from(buttons)
-                .sort(([, a], [, b]) => a.priority - b.priority)
-                .map(([id, { render: Button }]) => (
-                    <ErrorBoundary noop key={id} onError={e => logger.error(`Failed to render ${id}`, e.error)}>
-                        <Button {...props} />
-                    </ErrorBoundary>
-                ))}
-        </div>
+        <>
+            <style>{`
+                /* Allow the username and status text to shrink and truncate when the sidebar is small, 
+                   freeing up space for the extra plugins buttons without cutting them off */
+                div[class*="nameTag_"] {
+                    min-width: 0 !important;
+                }
+                div[class*="nameTag_"] > * {
+                    min-width: 0 !important;
+                    overflow: hidden !important;
+                    text-overflow: ellipsis !important;
+                    white-space: nowrap !important;
+                }
+            `}</style>
+            <div className="vc-user-area-btns" style={{ display: "contents" }}>
+                {Array.from(buttons)
+                    .sort(([, a], [, b]) => a.priority - b.priority)
+                    .map(([id, { render: Button }]) => (
+                        <ErrorBoundary noop key={id} onError={e => logger.error(`Failed to render ${id}`, e.error)}>
+                            <Button {...props} />
+                        </ErrorBoundary>
+                    ))}
+            </div>
+        </>
     );
 }
 

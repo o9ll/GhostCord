@@ -8,7 +8,7 @@ import { ApplicationCommandInputType, sendBotMessage } from "@api/Commands";
 import { UserAreaButton, UserAreaRenderProps } from "@api/UserArea";
 import { findByPropsLazy } from "@webpack";
 import definePlugin from "@utils/types";
-import { ChannelStore, ContextMenuApi, FluxDispatcher, Menu, React, SelectedChannelStore, VoiceActions, MediaEngineStore } from "@webpack/common";
+import { ChannelStore, ContextMenuApi, FluxDispatcher, Menu, React, SelectedChannelStore, VoiceActions, MediaEngineStore, UserStore } from "@webpack/common";
 import { t } from "../autoTranslateNightcord";
 
 let isGhostActive = false;
@@ -53,14 +53,29 @@ function sendFakeVoiceState() {
  */
 const syncState = () => {
     if (!SelectedChannelStore?.getVoiceChannelId?.()) return;
+    lastSyncTime = Date.now();
     sendFakeVoiceState();
 };
+
+let lastSyncTime = 0;
 
 /**
  * Called when Discord itself toggles mute/deafen — re-assert our fake state immediately.
  */
-function onVoiceStateChange() {
+function onVoiceStateChange(event: any) {
     if (!isGhostActive) return;
+
+    // Prevent infinite loops: if we just sent a sync < 1000ms ago, ignore the server's echo
+    if (Date.now() - lastSyncTime < 1000) return;
+
+    // Prevent spam: only re-assert if the voice state update is actually for OUR user
+    if (event?.type === "VOICE_STATE_UPDATES") {
+        const myId = UserStore.getCurrentUser()?.id;
+        const myUpdate = event.voiceStates?.find((v: any) => v.userId === myId);
+        if (!myUpdate) return;
+    }
+
+    lastSyncTime = Date.now();
     // Send it on the next tick so Discord's internal packet goes first
     setTimeout(sendFakeVoiceState, 0);
 }

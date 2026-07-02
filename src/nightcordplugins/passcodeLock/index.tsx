@@ -335,16 +335,24 @@ function PasscodeLocker({ type, button, onDone }: LockerProps) {
         }
     };
 
-    const accept = async () => {
+    // `accept` takes an optional explicit code to validate. This matters because
+    // `append()` below calls accept() synchronously (via setTimeout) right after
+    // computing the new full code string — if accept() fell back to reading the
+    // `code` state closed over from the same render, it would see the code as it
+    // was *before* the digit that was just typed, i.e. one character short. That
+    // was a real, silent bug: the very last digit typed was never actually checked,
+    // both when unlocking AND when the passcode was first set up in the editor
+    // (so the stored hash itself could end up one character shorter than intended).
+    const accept = async (submittedCode: string = code) => {
         try {
-            if (code === "") return;
+            if (submittedCode === "") return;
             if (type === "editor") {
                 if (!confirmStage) {
-                    setNewCode(code);
+                    setNewCode(submittedCode);
                     setCode("");
                     setConfirmStage(true);
                     if (iconRef.current) iconRef.current.src = Gifs.EDIT_ACTION;
-                } else if (code !== newCode) {
+                } else if (submittedCode !== newCode) {
                     fail();
                 } else {
                     close(true);
@@ -353,9 +361,9 @@ function PasscodeLocker({ type, button, onDone }: LockerProps) {
             }
             let ok = false;
             if (data.hash) {
-                ok = await hashCheck(code, data.salt!, data.iterations!, data.hash);
+                ok = await hashCheck(submittedCode, data.salt!, data.iterations!, data.hash);
             } else {
-                ok = (code === "0000" || code === "000000");
+                ok = (submittedCode === "0000" || submittedCode === "000000");
             }
             if (ok) close(true);
             else fail();
@@ -371,30 +379,13 @@ function PasscodeLocker({ type, button, onDone }: LockerProps) {
         const next = code + num.toString();
         setCode(next);
         setTimeout(() => {
-            if (len !== -1 && len <= next.length) accept();
+            if (len !== -1 && len <= next.length) accept(next);
         });
     };
 
     useEffect(() => {
         const interval = setInterval(checkDelay, 1000);
         checkDelay();
-
-        const onKeyDown = (e: KeyboardEvent) => {
-            e.preventDefault();
-            e.stopPropagation();
-            if (delay) return;
-            if (settings.store.highlightButtons) document.getElementById(`PCLBtn-${e.key}`)?.classList.add("PCL--btn-active");
-        };
-        const onKeyUp = (e: KeyboardEvent) => {
-            if (settings.store.highlightButtons) document.getElementById(`PCLBtn-${e.key}`)?.classList.remove("PCL--btn-active");
-            if (delay) return;
-            if (!isNaN(+e.key) && e.key !== " ") append(+e.key);
-            if (e.key === "Backspace") setCode(c => c.slice(0, -1));
-            if (e.key === "Escape" && type !== "default") close(false);
-            if (e.key === "Enter" && len === -1) accept();
-        };
-        document.addEventListener("keydown", onKeyDown, true);
-        window.addEventListener("keyup", onKeyUp);
 
         // entrance animation — wrapped defensively so a styling/layout error never
         // leaves the overlay stuck mid-animation (which would block all clicks/keys).
@@ -467,11 +458,40 @@ function PasscodeLocker({ type, button, onDone }: LockerProps) {
             clearInterval(interval);
             clearTimeout(entranceTimeout);
             if (tick) clearInterval(tick);
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    // Keyboard handling lives in its own effect, re-bound whenever the values it
+    // reads change, so the listeners never close over stale `code`/`delay`/etc.
+    // Previously this was inside the mount-only effect above: since that effect
+    // only ran once, onKeyUp always saw `code` exactly as it was on the very first
+    // render, so append() kept computing `next` from an empty string and only the
+    // first digit typed on the keyboard ever registered. Mouse clicks worked fine
+    // because each click used a freshly rendered `append` closure from that render.
+    useEffect(() => {
+        const onKeyDown = (e: KeyboardEvent) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (delay) return;
+            if (settings.store.highlightButtons) document.getElementById(`PCLBtn-${e.key}`)?.classList.add("PCL--btn-active");
+        };
+        const onKeyUp = (e: KeyboardEvent) => {
+            if (settings.store.highlightButtons) document.getElementById(`PCLBtn-${e.key}`)?.classList.remove("PCL--btn-active");
+            if (delay) return;
+            if (!isNaN(+e.key) && e.key !== " ") append(+e.key);
+            if (e.key === "Backspace") setCode(c => c.slice(0, -1));
+            if (e.key === "Escape" && type !== "default") close(false);
+            if (e.key === "Enter" && len === -1) accept();
+        };
+        document.addEventListener("keydown", onKeyDown, true);
+        window.addEventListener("keyup", onKeyUp);
+        return () => {
             document.removeEventListener("keydown", onKeyDown, true);
             window.removeEventListener("keyup", onKeyUp);
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    }, [delay, code, confirmStage, newCode, type, len]);
 
     const title = type === "editor" ? (confirmStage ? "Re-enter your passcode" : "Enter your new passcode") : "Enter your Discord passcode";
 

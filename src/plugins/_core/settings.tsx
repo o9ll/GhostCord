@@ -18,8 +18,8 @@ import {
     UpdaterTab,
     VencordTab,
 } from "@components/settings";
-import { CreateThemeTab } from "@nightcordplugins/createTheme/components/CreateThemeTab";
-import { PencilSparkleIcon } from "@nightcordplugins/createTheme/components/PencilSparkleIcon";
+import { CreateThemeTab } from "@components/settings/tabs/createTheme/CreateThemeTab";
+import { PencilSparkleIcon } from "@components/settings/tabs/createTheme/PencilSparkleIcon";
 import IconsTab from "@nightcordplugins/iconViewer/components/IconsTab";
 import { gitHashShort } from "@shared/vencordUserAgent";
 import { Devs } from "@utils/constants";

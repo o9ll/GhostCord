@@ -25,32 +25,6 @@ function copyIfExists(src, dst) {
     return false;
 }
 
-// ── patched discord_voice modules ──────────────────────────────────────────
-const desktopModules   = path.join(process.env.USERPROFILE || "", "Desktop", "modules");
-const repoModules      = path.join(rootDir, "static", "modules_override");
-const backupModules    = path.join(rootDir, "static", "modules_backup_working_stereo");
-
-const patchedSrc =
-    (fs.existsSync(desktopModules)  && fs.readdirSync(desktopModules).length  > 0) ? desktopModules  :
-    (fs.existsSync(repoModules)     && fs.readdirSync(repoModules).length     > 0) ? repoModules      :
-    (fs.existsSync(backupModules)   && fs.readdirSync(backupModules).length   > 0) ? backupModules    :
-    null;
-
-if (patchedSrc) {
-    console.log(`[collect] Copying patched modules from ${patchedSrc}...`);
-    for (const voiceDir of ["discord_voice", "discord_voice-1", "discord_voice1"]) {
-        const voiceDst = path.join(distDir, "modules", voiceDir, "discord_voice");
-        fs.mkdirSync(voiceDst, { recursive: true });
-        for (const f of fs.readdirSync(patchedSrc)) {
-            if (f === "CHECKSUMS.sha256") continue;
-            const src = path.join(patchedSrc, f);
-            if (fs.statSync(src).isFile()) fs.copyFileSync(src, path.join(voiceDst, f));
-        }
-    }
-    console.log("[collect] ✅ Modules copied");
-} else {
-    console.warn("[collect] ⚠️ Patched modules NOT FOUND — voice features may not work");
-}
 
 // ── multi-instance icons ────────────────────────────────────────────────────
 const lolllSrc    = path.join(process.env.USERPROFILE || "", "Desktop", "lolll");

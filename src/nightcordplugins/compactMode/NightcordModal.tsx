@@ -10,7 +10,7 @@ import { React, useState } from "@webpack/common";
 
 import { ThemesTab, ChangelogTab, PluginsTab, BackupAndRestoreTab, UpdaterTab, VencordTab, SyncTab, LanguageTab } from "@components/settings/tabs";
 import IconsTab from "@nightcordplugins/iconViewer/components/IconsTab";
-import { CreateThemeTab } from "@nightcordplugins/createTheme/components/CreateThemeTab";
+import { CreateThemeTab } from "@components/settings/tabs/createTheme/CreateThemeTab";
 
 // ── Tab definitions ──────────────────────────────────────────────────────────
 

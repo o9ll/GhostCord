@@ -393,8 +393,9 @@ export const translations: TranslationMap = {
     "Aucun événement": { en: "No events", es: "Sin eventos", ru: "??? ???????", zh: "????" },
 };
 
-const AutoTranslateNightcord = definePlugin({
+export default definePlugin({
     name: "AutoTranslateNightcord",
+    required: true,
     enabledByDefault: true,
     description: "Automatic translation for Nightcord.",
     authors: [{ name: "Trigger", id: 0n }],
@@ -422,5 +423,3 @@ export function useTranslation() {
         lang: "en",
     };
 }
-
-export default AutoTranslateNightcord;

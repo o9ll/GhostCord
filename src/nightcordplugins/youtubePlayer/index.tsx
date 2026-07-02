@@ -710,7 +710,7 @@ async function _doRpc() {
             socketId: RPC_SOCKET_ID,
             activity: {
                 application_id: RPC_APP_ID,
-                name: "Watch Youtube in NightCord",
+                name: "Youtube in NightCord",
                 details: p.video.title || "Unknown video",
                 state: p.video.author || undefined,
                 type: 2, // LISTENING (avoids "Regarde" prefix in French)

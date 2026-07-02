@@ -1,4 +1,4 @@
-﻿/*
+/*
  * Vencord, a modification for Discord's desktop app
  * Copyright (c) 2023 Vendicated and contributors
  *
@@ -19,7 +19,7 @@
 import ErrorBoundary from "@components/ErrorBoundary";
 import { Flex } from "@components/Flex";
 import { InfoIcon, OwnerCrownIcon } from "@components/Icons";
-import { buildExtraRoleContextMenuItems } from "@nightcordplugins/betterRoleContext";
+// removed betterRoleContext import
 import { cl, getGuildPermissionSpecMap, loadGetGuildPermissionSpecMap } from "@plugins/permissionsViewer/utils";
 import { copyToClipboard } from "@utils/clipboard";
 import { getIntlMessage, getUniqueUsername } from "@utils/discord";
@@ -218,7 +218,7 @@ function ViewAsRoleIcon() {
 function RoleContextMenu({ guild, roleId, onClose }: { guild: Guild; roleId: string; onClose: () => void; }) {
     const popoutRef = useRef(null);
     const role = GuildRoleStore.getRole(guild.id, roleId);
-    const { before, after } = buildExtraRoleContextMenuItems(role, guild, popoutRef);
+    const { before, after } = { before: null, after: null };
 
     return (
         <Menu.Menu

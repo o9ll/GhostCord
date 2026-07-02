@@ -20,7 +20,7 @@ const settings = definePluginSettings({
     isActive: {
         type: OptionType.BOOLEAN,
         description: "Enable automatic correction",
-        default: true,
+        default: false,
     },
     language: {
         type: OptionType.SELECT,

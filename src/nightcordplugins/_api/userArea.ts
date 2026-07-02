@@ -17,16 +17,14 @@ export default definePlugin({
 
     patches: [
         {
-            find: ".DISPLAY_NAME_STYLES_COACHMARK)",
+            // Inject directly into the native buttons container (rv in minified code)
+            // This ensures our custom buttons share the exact same spacing and flex layout
+            // as the Microphone, Deafen, and Settings buttons, preventing wrapping bugs.
+            find: "shouldShowSpeakingWhileMutedTooltip",
             replacement: [
                 {
-                    match: /(?<=className:(\i)\.\i,style:\i,)children:\[/,
-                    replace: "children:[...$self.renderButtons(arguments[0],$1),"
-                },
-                // fix discord weird shrink with extra buttons
-                {
-                    match: /(?<=\{ref:\i,)style:(\i)/,
-                    replace: "style:{...$1,minWidth:0}"
+                    match: /(children:\[)(?=\(0,\i\.jsx\)\(\i\.\i,\{targetElementRef:\i,renderPopout:)/,
+                    replace: "$1...$self.renderButtons(arguments[0]),"
                 }
             ]
         }
@@ -34,9 +32,9 @@ export default definePlugin({
 
     renderButtons(props: { nameplate?: any; }) {
         return Vencord.Api?.UserArea?._renderButtons?.({
-            nameplate: props.nameplate,
-            iconForeground: props.nameplate != null ? cssClasses?.iconForeground : void 0,
+            nameplate: props?.nameplate,
+            iconForeground: props?.nameplate != null ? cssClasses?.iconForeground : void 0,
             hideTooltips: false
-        });
+        }) ?? [];
     }
 });
