@@ -5,7 +5,7 @@
 
 **A custom Discord client built for people who actually care about how Discord runs.**
 
-[![Discord](https://img.shields.io/badge/Discord-Join%20us-5865F2?logo=discord\&logoColor=white)](https://discord.gg/nightcord)
+[![Telegram](https://img.shields.io/badge/Telegram-Join%20us-26A5E4?logo=telegram&logoColor=white)](https://t.me/nightcordoff)
 [![License](https://img.shields.io/badge/license-GPL%20v3-a855f7)](./LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows-3b82f6.svg?logo=windows\&logoColor=white)](https://source.nightcord.st/nightcord/nightcord)
 [![Website](https://img.shields.io/badge/website-nightcord.st-5865F2?logo=googlechrome\&logoColor=white)](https://nightcord.st)
