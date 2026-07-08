@@ -396,13 +396,15 @@ export default definePlugin({
     },
 
     renderMessageAccessory(props) {
+        if (!isSupportChannel(props.channel.id)) return;
+
         const buttons = [] as JSX.Element[];
 
         const equicordSupport = isEquicordSupport(props.message.author.id);
 
         const shouldAddUpdateButton =
             !IS_UPDATER_DISABLED
-            && ((isSupportChannel(props.channel.id) && equicordSupport))
+            && equicordSupport
             && props.message.content?.toLowerCase().includes("update");
 
         if (shouldAddUpdateButton) {

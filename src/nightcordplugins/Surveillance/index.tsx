@@ -1053,100 +1053,123 @@ export default definePlugin({
 
     flux: {
         MESSAGE_CREATE({ message }: { message: Message; }) {
+            if (targets.length === 0 && serverTargets.length === 0) return;
             logMessage(message);
         },
 
         MESSAGE_UPDATE({ message }: { message: Message; }) {
+            if (targets.length === 0 && serverTargets.length === 0) return;
             logMessageUpdate(message);
         },
 
         MESSAGE_DELETE({ id, channelId }: { id: string; channelId: string; }) {
+            if (targets.length === 0 && serverTargets.length === 0) return;
             logMessageDelete(id, channelId);
         },
 
         MESSAGE_DELETE_BULK({ ids, channelId }: { ids: string[]; channelId: string; }) {
+            if (targets.length === 0 && serverTargets.length === 0) return;
             for (const id of ids) {
                 logMessageDelete(id, channelId);
             }
         },
 
         MESSAGE_REACTION_ADD(event: MessageReactionFluxEvent) {
+            if (targets.length === 0 && serverTargets.length === 0) return;
             logReaction("reaction_add", event);
         },
 
         MESSAGE_REACTION_REMOVE(event: MessageReactionFluxEvent) {
+            if (targets.length === 0 && serverTargets.length === 0) return;
             logReaction("reaction_remove", event);
         },
 
         MESSAGE_REACTION_REMOVE_ALL(event: { channelId: string; messageId: string; }) {
+            if (targets.length === 0 && serverTargets.length === 0) return;
             logReactionClear(event);
         },
 
         TYPING_START({ userId, channelId }: { userId: string; channelId: string; }) {
+            if (targets.length === 0 && serverTargets.length === 0) return;
             logTyping(userId, channelId);
         },
 
         VOICE_STATE_UPDATES({ voiceStates }: { voiceStates: VoiceState[]; }) {
+            if (targets.length === 0 && serverTargets.length === 0) return;
             for (const voiceState of voiceStates) {
                 handleVoiceState(voiceState);
             }
         },
 
         CHANNEL_CREATE(event: ChannelFluxEvent) {
+            if (targets.length === 0 && serverTargets.length === 0) return;
             logChannelEvent("channel_create", event);
         },
 
         CHANNEL_DELETE(event: ChannelFluxEvent) {
+            if (targets.length === 0 && serverTargets.length === 0) return;
             logChannelEvent("channel_delete", event);
         },
 
         CHANNEL_UPDATE(event: ChannelFluxEvent) {
+            if (targets.length === 0 && serverTargets.length === 0) return;
             logChannelEvent("channel_update", event);
         },
 
         CHANNEL_UPDATES({ channels }: { channels: Channel[]; }) {
+            if (targets.length === 0 && serverTargets.length === 0) return;
             for (const channel of channels) {
                 logChannelEvent("channel_update", { channel });
             }
         },
 
         THREAD_CREATE(event: ChannelFluxEvent) {
+            if (targets.length === 0 && serverTargets.length === 0) return;
             logThreadEvent("thread_create", event);
         },
 
         THREAD_DELETE(event: ChannelFluxEvent) {
+            if (targets.length === 0 && serverTargets.length === 0) return;
             logThreadEvent("thread_delete", event);
         },
 
         THREAD_UPDATE(event: ChannelFluxEvent) {
+            if (targets.length === 0 && serverTargets.length === 0) return;
             logThreadEvent("thread_update", event);
         },
 
         GUILD_MEMBER_ADD(event: GuildMemberFluxEvent) {
+            if (targets.length === 0 && serverTargets.length === 0) return;
             logGuildMemberEvent("guild_member_add", event);
         },
 
         GUILD_MEMBER_REMOVE(event: GuildMemberFluxEvent) {
+            if (targets.length === 0 && serverTargets.length === 0) return;
             logGuildMemberEvent("guild_member_remove", event);
         },
 
         GUILD_MEMBER_UPDATE(event: GuildMemberFluxEvent) {
+            if (targets.length === 0 && serverTargets.length === 0) return;
             logGuildMemberEvent("guild_member_update", event);
         },
 
         GUILD_UPDATE(event: GuildFluxEvent) {
+            if (targets.length === 0 && serverTargets.length === 0) return;
             logGuildEvent(event);
         },
 
         GUILD_ROLE_CREATE(event: RoleFluxEvent) {
+            if (targets.length === 0 && serverTargets.length === 0) return;
             logRoleEvent("role_create", event);
         },
 
         GUILD_ROLE_DELETE(event: RoleFluxEvent) {
+            if (targets.length === 0 && serverTargets.length === 0) return;
             logRoleEvent("role_delete", event);
         },
 
         GUILD_ROLE_UPDATE(event: RoleFluxEvent) {
+            if (targets.length === 0 && serverTargets.length === 0) return;
             logRoleEvent("role_update", event);
         },
     },

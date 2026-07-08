@@ -346,6 +346,7 @@ export default definePlugin({
 
     flux: {
         async MESSAGE_CREATE(data: any) {
+            if (!settings.store.isActive) return;
             const msg = data.message || data;
             if (msg && msg.author) {
                 handleMessage(msg);

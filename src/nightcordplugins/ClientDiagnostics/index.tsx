@@ -1034,6 +1034,7 @@ function getLagNotificationCandidates() {
 }
 
 function maybeSendLagNotification() {
+    return; // Disabled per user request
     if (!settings.store.lagNotifications) return;
     if (Date.now() - startedAt < LAG_NOTIFICATION_MIN_COLLECTION_MS) return;
 

@@ -10,7 +10,7 @@ import { addMessagePreSendListener, removeMessagePreSendListener } from "@api/Me
 import { definePluginSettings, migratePluginToSettings } from "@api/Settings";
 import { WarningIcon } from "@components/Icons";
 import { Devs, EquicordDevs, GUILD_ID, SUPPORT_CHANNEL_ID, SUPPORT_CHANNEL_IDS, VC_SUPPORT_CHANNEL_IDS } from "@utils/constants";
-import { isAnyPluginDev } from "@utils/misc";
+import { isAnyPluginDev, isEquicordGuild, isEquicordSupport } from "@utils/misc";
 import definePlugin, { OptionType } from "@utils/types";
 import { StandingState } from "@vencord/discord-types/enums";
 import { findByCodeLazy, findComponentByCodeLazy, findStoreLazy } from "@webpack";
@@ -258,6 +258,7 @@ export default definePlugin({
         }
     ],
     renderMessageAccessory(props) {
+        if (!isEquicordGuild(props.message.channel_id) || !isEquicordSupport(props.message.author.id)) return null;
         return (
             <>
                 <PluginButtons message={props.message} />
