@@ -80,6 +80,7 @@ export interface Settings {
     | undefined;
     disableMinSize: boolean;
     winNativeTitleBar: boolean;
+    streamProof: boolean;
     seeAllCustomProfile: boolean;
     syncOwnCustomProfile: boolean;
     language: "en" | "fr" | "es" | "ru" | "zh";
@@ -139,6 +140,7 @@ const DefaultSettings: Settings = {
     macosVibrancyStyle: undefined,
     disableMinSize: false,
     winNativeTitleBar: false,
+    streamProof: false,
     seeAllCustomProfile: true,
     syncOwnCustomProfile: false,
     language: "en",

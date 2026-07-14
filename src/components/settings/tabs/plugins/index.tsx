@@ -43,6 +43,9 @@ import { JSX } from "react";
 import { t } from "@api/i18n";
 
 import Plugins, { ExcludedPlugins, PluginMeta } from "~plugins";
+import { fetchPluginRatings, PluginRatings } from "@api/PluginLikes";
+import { authorizeLikeSystem, LIKE_AUTH_EVENT } from "@api/PluginLikesAuth";
+import { getStoredToken } from "@api/OAuth2";
 
 import { PluginCard } from "./PluginCard";
 import { openPluginModal, openResetDefaultsModal, openWarningModal } from "./PluginModal";
@@ -65,10 +68,19 @@ function UserPluginsTabIcon() {
     return <img src="https://equicord.org/assets/icons/misc/userplugin.png" alt={t("User Plugins")} style={{ width: 18, height: 18, borderRadius: 4 }} />;
 }
 
+function LikedPluginsTabIcon() {
+    return (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path fill="#fff" d="M12.47 21.73a.92.92 0 0 1-.94 0C9.43 20.48 1 15.09 1 8.75A5.75 5.75 0 0 1 6.75 3c2.34 0 3.88.9 5.25 2.26A6.98 6.98 0 0 1 17.25 3 5.75 5.75 0 0 1 23 8.75c0 6.34-8.42 11.73-10.53 12.98Z" />
+        </svg>
+    );
+}
+
 const makeCategoryOptions = (othersCount?: number) => [
     { label: "Vencord & Equicord", value: SearchStatus.OTHERS },
     { label: "Nightcord", value: SearchStatus.NIGHTCORD },
     { label: t("User Plugins"), value: SearchStatus.USER_PLUGINS },
+    { label: t("Liked Plugins"), value: SearchStatus.LIKED_PLUGINS },
     { label: t("Community Plugins"), value: "community", disabled: true }
 ];
 export const cl = classNameFactory("vc-plugins-");
@@ -275,6 +287,38 @@ export default function PluginSettings({ premiumOnly = false }: PluginSettingsPr
         return o;
     }, []);
 
+    const [ratings, setRatings] = React.useState<PluginRatings>({});
+    React.useEffect(() => {
+        fetchPluginRatings().then(setRatings).catch(() => {});
+    }, []);
+
+    const [isLikeLoggedIn, setIsLikeLoggedIn] = React.useState(true);
+    const [likeLoginLoading, setLikeLoginLoading] = React.useState(false);
+    React.useEffect(() => {
+        let cancelled = false;
+        const refresh = () => getStoredToken().then(token => { if (!cancelled) setIsLikeLoggedIn(!!token); });
+        refresh();
+        window.addEventListener(LIKE_AUTH_EVENT, refresh);
+        return () => {
+            cancelled = true;
+            window.removeEventListener(LIKE_AUTH_EVENT, refresh);
+        };
+    }, []);
+
+    const handleLikeLogin = useCallback(async () => {
+        if (likeLoginLoading) return;
+        setLikeLoginLoading(true);
+        try {
+            const token = await authorizeLikeSystem();
+            if (token) {
+                setIsLikeLoggedIn(true);
+                fetchPluginRatings(true).then(setRatings).catch(() => {});
+            }
+        } finally {
+            setLikeLoginLoading(false);
+        }
+    }, [likeLoginLoading]);
+
     const sortedPlugins = useMemo(() => Object.values(Plugins)
         .filter(p => typeof p.name === "string")
         .sort((a, b) => (a.name ?? "").localeCompare(b.name ?? "")), []);
@@ -367,6 +411,10 @@ export default function PluginSettings({ premiumOnly = false }: PluginSettingsPr
             case SearchStatus.TUTORIAL:
                 if (!TUTORIAL_CACHE.get(plugin.name)) return false;
                 break;
+            case SearchStatus.LIKED_PLUGINS:
+                if (!pluginMeta?.folderName?.startsWith("src/nightcordplugins/")) return false;
+                if (!ratings[plugin.name]?.likedByMe) return false;
+                break;
         }
 
         if (!search.length) return true;
@@ -376,7 +424,8 @@ export default function PluginSettings({ premiumOnly = false }: PluginSettingsPr
             plugin.name === "StereoInstaller" ||
             plugin.name === "ClientDiagnostics" ||
             plugin.name === "SecureBookmarks" ||
-            plugin.name === "StatusCycler"
+            plugin.name === "StatusCycler" ||
+            plugin.name === "MutualScanner"
         );
 
         if ((search.includes("illegalcord") || search.includes("illegal")) && isIllegalcordPartner) {
@@ -388,7 +437,7 @@ export default function PluginSettings({ premiumOnly = false }: PluginSettingsPr
             plugin.description.toLowerCase().includes(search) ||
             plugin.tags?.some(t => t.toLowerCase().includes(search))
         );
-    }, [searchValue, search]);
+    }, [searchValue, search, ratings]);
 
     const [newPluginsSet] = useAwaiter(() => DataStore.get("Vencord_existingPlugins").then((cachedPlugins: Record<string, number> | undefined) => {
         const now = Date.now() / 1000;
@@ -435,8 +484,14 @@ export default function PluginSettings({ premiumOnly = false }: PluginSettingsPr
                 }
             }
         }
+        // Toujours trier par nombre de likes décroissant (plugins les plus likés en premier)
+        const byLikes = (a: typeof sortedPlugins[number], b: typeof sortedPlugins[number]) =>
+            (ratings[b.name]?.likes ?? 0) - (ratings[a.name]?.likes ?? 0);
+        nightcordData.sort(byLikes);
+        othersData.sort(byLikes);
+
         return { nightcordData, othersData, requiredData };
-    }, [sortedPlugins, searchValue, newPluginsSet, depMap, pluginFilter]);
+    }, [sortedPlugins, searchValue, newPluginsSet, depMap, pluginFilter, ratings]);
 
     const allDataLength = nightcordData.length + othersData.length;
     const hasMore = visibleCount < allDataLength;
@@ -648,12 +703,14 @@ export default function PluginSettings({ premiumOnly = false }: PluginSettingsPr
             plugins = plugins.filter(p => !isNightcordPlugin(p));
         } else if (searchValue.status === SearchStatus.USER_PLUGINS) {
             plugins = plugins.filter(isUserPlugin);
+        } else if (searchValue.status === SearchStatus.LIKED_PLUGINS) {
+            plugins = plugins.filter(p => isNightcordPlugin(p) && ratings[p]?.likedByMe);
         }
 
         const total = plugins.length;
         const enabled = plugins.filter(p => isPluginEnabled(p)).length;
         return { total, enabled };
-    }, [settings.plugins, searchValue.status]);
+    }, [settings.plugins, searchValue.status, ratings]);
 
     const percent = categoryStats.total > 0 ? Math.round((categoryStats.enabled / categoryStats.total) * 100) : 0;
     const strokeDashoffset = 62.83 - (62.83 * percent / 100);
@@ -668,6 +725,16 @@ export default function PluginSettings({ premiumOnly = false }: PluginSettingsPr
                             <Paragraph>{t("Manage your Nightcord and community plugins here. Enable, disable, and configure them to your liking.")}</Paragraph>
                         </div>
                         <div className={cl("ecosystem-banner-buttons")}>
+                            {!isLikeLoggedIn && (
+                                <Button
+                                    variant="primary"
+                                    size="small"
+                                    disabled={likeLoginLoading}
+                                    onClick={handleLikeLogin}
+                                >
+                                    {t("Log in to like")}
+                                </Button>
+                            )}
                             <Button
                                 variant="secondary"
                                 size="small"
@@ -725,11 +792,13 @@ export default function PluginSettings({ premiumOnly = false }: PluginSettingsPr
                             <div className={cl("stat-title")}>
                                 {searchValue.status === SearchStatus.USER_PLUGINS ? t("USER PLUGINS") : 
                                  searchValue.status === SearchStatus.OTHERS ? t("VENCORD & EQUICORD PLUGINS") : 
+                                 searchValue.status === SearchStatus.LIKED_PLUGINS ? t("LIKED PLUGINS") :
                                  t("NIGHTCORD PLUGINS")}
                             </div>
                             <div className={cl("stat-value")}>
                                 {searchValue.status === SearchStatus.USER_PLUGINS ? totalUserPlugins : 
                                  searchValue.status === SearchStatus.OTHERS ? totalOtherPlugins : 
+                                 searchValue.status === SearchStatus.LIKED_PLUGINS ? categoryStats.total :
                                  totalNightcordPlugins}
                             </div>
                         </div>
@@ -753,6 +822,7 @@ export default function PluginSettings({ premiumOnly = false }: PluginSettingsPr
                                 if (o?.value === SearchStatus.NIGHTCORD) return <NightcordTabIcon />;
                                 if (o?.value === SearchStatus.OTHERS) return <VencordEquicordTabIcon />;
                                 if (o?.value === SearchStatus.USER_PLUGINS) return <UserPluginsTabIcon />;
+                                if (o?.value === SearchStatus.LIKED_PLUGINS) return <LikedPluginsTabIcon />;
                                 return null;
                             }}
                         />
@@ -819,7 +889,19 @@ export default function PluginSettings({ premiumOnly = false }: PluginSettingsPr
                         </div>
                     )}
 
-                    {nightcordData.length === 0 && othersData.length === 0 && searchValue.status !== SearchStatus.USER_PLUGINS && (
+                    {nightcordData.length === 0 && othersData.length === 0 && searchValue.status === SearchStatus.LIKED_PLUGINS && (
+                        <div style={{ textAlign: "center", padding: "48px 16px", color: "var(--text-muted)" }}>
+                            <div style={{ fontSize: 32, marginBottom: 12 }}>
+                                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" style={{ margin: "0 auto" }}>
+                                    <path fill="currentColor" fillRule="evenodd" d="M12 8.07 10.6 6.7A5 5 0 0 0 6.75 5 3.75 3.75 0 0 0 3 8.75c0 2.32 1.59 4.76 3.87 6.96A31.87 31.87 0 0 0 12 19.67c1.2-.74 3.26-2.14 5.13-3.96 2.28-2.2 3.87-4.64 3.87-6.96A3.75 3.75 0 0 0 17.25 5a5 5 0 0 0-3.85 1.69L12 8.07Zm0-2.8A6.98 6.98 0 0 0 6.75 3 5.75 5.75 0 0 0 1 8.75c0 6.34 8.42 11.73 10.53 12.98.29.17.65.17.94 0C14.57 20.48 23 15.09 23 8.75A5.75 5.75 0 0 0 17.25 3c-2.34 0-3.88.9-5.25 2.26Z" clipRule="evenodd" />
+                                </svg>
+                            </div>
+                            <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 8 }}>{t("No liked plugins yet")}</div>
+                            <div style={{ fontSize: 13 }}>{t("Like a Nightcord plugin from its card to see it here.")}</div>
+                        </div>
+                    )}
+
+                    {nightcordData.length === 0 && othersData.length === 0 && searchValue.status !== SearchStatus.USER_PLUGINS && searchValue.status !== SearchStatus.LIKED_PLUGINS && (
                         <ExcludedPluginsList search={search} />
                     )}
 

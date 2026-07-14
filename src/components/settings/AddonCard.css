@@ -54,6 +54,63 @@
     align-items: center;
 }
 
+.vc-addon-source {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.vc-addon-source button {
+    -webkit-appearance: none;
+    appearance: none;
+    outline: none;
+    box-shadow: none !important;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.vc-addon-source button:focus,
+.vc-addon-source button:focus-visible,
+.vc-addon-source button:active {
+    outline: none !important;
+    box-shadow: none !important;
+    background: none !important;
+}
+
+.nc-badge-btn {
+    background: none;
+    border: none;
+    outline: none;
+    box-shadow: none;
+    cursor: pointer;
+    padding: 2px;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    border-radius: 4px;
+    color: var(--interactive-normal);
+    transition: color 0.15s ease;
+}
+
+.nc-badge-btn:hover {
+    color: var(--interactive-hover);
+}
+
+.nc-badge-btn.nc-badge-btn-disabled {
+    cursor: not-allowed;
+}
+
+.nc-badge-btn.nc-badge-btn-disabled:hover {
+    color: var(--interactive-normal);
+}
+
+.nc-badge-btn.nc-badge-liked {
+    color: #ffffff;
+}
+
+.nc-badge-btn.nc-badge-liked:hover {
+    color: #ffffff;
+}
+
 .vc-addon-note {
     height: 36px;
     overflow: hidden;

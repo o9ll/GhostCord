@@ -86,6 +86,7 @@ const SPOTIFY_IDLE_DURATION = 60_000;
 const SWIPE_MIN_DISTANCE = 48;
 const SWIPE_MIN_DURATION = 120;
 const portalModule = Symbol();
+let isDynamicIslandActive = false;
 const runtime = (Reflect.get(globalThis, RUNTIME_KEY) as DynamicIslandRuntime | undefined) ?? {
     activeModule: portalModule,
     notification: null,
@@ -103,9 +104,10 @@ const settings = definePluginSettings({
         description: t("Choose the Dynamic Island color."),
         type: OptionType.SELECT,
         options: [
+            { label: t("Frosted Glass"), value: "blur", default: true },
             { label: t("Transparent"), value: "transparent" },
             { label: t("Discord theme"), value: "theme" },
-            { label: t("AMOLED"), value: "amoled", default: true },
+            { label: t("AMOLED"), value: "amoled" },
             { label: t("White"), value: "white" },
             { label: t("Light blue"), value: "blue" },
             { label: t("Pink"), value: "pink" }
@@ -604,6 +606,7 @@ function ScreenShareSection({ startedAt, stream }: { startedAt: number; stream: 
 }
 
 function DynamicIsland({ onlySoundCord }: { onlySoundCord?: boolean }) {
+    if (!isDynamicIslandActive && !onlySoundCord) return null;
     const [expanded, setExpanded] = useState(false);
     const [notification, setNotification] = useState(runtime.notification);
     const [primaryIsland, setPrimaryIsland] = useState<IslandType>(IslandType.ScreenShare);
@@ -628,7 +631,7 @@ function DynamicIsland({ onlySoundCord }: { onlySoundCord?: boolean }) {
     // show paused SoundCord only when another island (call, screen share, Spotify) is also active
     const hasOtherActivity = !!(track || channelId || stream);
     const scTrackBase = (showSoundCordIsland || onlySoundCord) && soundCordIslandEnabled ? soundCordState.playing : null;
-    const scTrack = scTrackBase && (soundCordState.isPlaying || hasOtherActivity) ? scTrackBase : null;
+    const scTrack = scTrackBase;
     const streamKey = stream ? getStreamKey(stream) : null;
     const activeIslands: IslandType[] = [];
     if (stream) activeIslands.push(IslandType.ScreenShare);
@@ -641,6 +644,13 @@ function DynamicIsland({ onlySoundCord }: { onlySoundCord?: boolean }) {
     const primarySoundCord = primary === IslandType.SoundCord ? scTrack : null;
     const primaryChannelId = primary === IslandType.Voice ? channelId : undefined;
     const idle = !track && !scTrack && !channelId && !stream;
+
+    const [now, setNow] = useState(new Date());
+    useEffect(() => {
+        if (!idle) return;
+        const intervalId = setInterval(() => setNow(new Date()), 1000);
+        return () => clearInterval(intervalId);
+    }, [idle]);
 
     useEffect(() => {
         if (streamKey) setStreamStartedAt(Date.now());
@@ -751,6 +761,8 @@ function DynamicIsland({ onlySoundCord }: { onlySoundCord?: boolean }) {
     };
 
     const primaryIsPlaying = primary === IslandType.Spotify ? isPlaying : primary === IslandType.SoundCord ? soundCordState.isPlaying : false;
+    const timeString = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const dateString = now.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' });
 
     return (
         <div className={cl("root", `color-${islandColor}`, {
@@ -779,14 +791,14 @@ function DynamicIsland({ onlySoundCord }: { onlySoundCord?: boolean }) {
                                 ? <img key={primarySoundCord.artworkUrl} className={cl("summary-cover")} src={primarySoundCord.artworkUrl} alt="" draggable={false} />
                                 : <IslandIcon className={cl("summary-icon")} />}
                 <div key={notification?.id ?? primary ?? "idle"} className={cl("summary-copy")}>
-                    <strong>{notification?.title ?? (primaryStream ? t("You are sharing your screen") : primaryTrack?.name ?? primarySoundCord?.title ?? (primaryChannelId ? t("Discord call") : t("Dynamic Island")))}</strong>
+                    <strong>{notification?.title ?? (primaryStream ? t("You are sharing your screen") : primaryTrack?.name ?? primarySoundCord?.title ?? (primaryChannelId ? t("Discord call") : (idle ? timeString : t("Dynamic Island"))))}</strong>
                     <span>{notification?.body ?? (primaryStream
                         ? <>Live for <ScreenShareTimer startedAt={streamStartedAt} /></>
                         : primaryTrack
                             ? primaryTrack.artists.map(artist => artist.name).join(", ")
                             : primarySoundCord
                                 ? primarySoundCord.artist
-                                : primaryChannelId ? t("Call controls available") : t("Ready for your activities"))}</span>
+                                : primaryChannelId ? t("Call controls available") : (idle ? dateString : t("Ready for your activities")))}</span>
                 </div>
                 {!notification && (primaryTrack || primarySoundCord) && (
                     <span className={cl("visualizer")} aria-label={primaryIsPlaying ? t("Playing") : t("Paused")}>
@@ -841,7 +853,7 @@ export function DynamicIslandPortal({ onlySoundCord }: { onlySoundCord?: boolean
         };
     }, [owner]);
 
-    return runtime.activeModule === portalModule && runtime.owner === owner
+    return runtime.activeModule === portalModule && runtime.owner === owner && (isDynamicIslandActive || onlySoundCord)
         ? ReactDOM.createPortal(<DynamicIsland onlySoundCord={onlySoundCord} />, document.body)
         : null;
 }
@@ -857,10 +869,12 @@ export default definePlugin({
     settings,
 
     start() {
+        isDynamicIslandActive = true;
         musicControlsSettings.store.showSpotifyControls = settings.store.showSpotifyPanel;
     },
 
     stop() {
+        isDynamicIslandActive = false;
         setIslandNotification(null);
     },
 

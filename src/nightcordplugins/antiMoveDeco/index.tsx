@@ -30,16 +30,11 @@ function onVoiceStateUpdate({ voiceStates }: { voiceStates: any[]; }) {
     if (myState) {
         // Si le nouveau channelId est différent de celui qu'on protège (ou null si déco)
         if (myState.channelId !== targetChannelId) {
-            console.log(`[AntiMoveDeco] Movement or disconnect detected! Returning to channel ${targetChannelId}...`);
-
-            // Petit délai pour laisser Discord finir sa déconnexion propre avant de reco
             setTimeout(() => {
                 if (enabled && targetChannelId) {
                     try {
                         ChannelActions?.selectVoiceChannel?.(targetChannelId);
-                    } catch (e) {
-                        console.error("[AntiMoveDeco] Error while reconnecting:", e);
-                    }
+                    } catch { }
                 }
             }, 500);
         }
@@ -68,11 +63,9 @@ function AntiMoveDecoButton() {
             }
             targetChannelId = channelId;
             enabled = true;
-            console.log(`[AntiMoveDeco] Enabled. Protected channel: ${targetChannelId}`);
         } else {
             enabled = false;
             targetChannelId = null;
-            console.log("[AntiMoveDeco] Disabled.");
         }
         forceUpdate();
     };

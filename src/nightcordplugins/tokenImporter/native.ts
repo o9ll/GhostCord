@@ -36,7 +36,6 @@ export async function checkToken(_: any, token: string): Promise<{ valid: boolea
             let data = "";
             res.on("data", (chunk: Buffer) => { data += chunk.toString(); });
             res.on("end", () => {
-                console.log(`[TokenImporter] Status ${res.statusCode} for token ${token.slice(0, 15)}...`);
                 if (res.statusCode === 200) {
                     try { resolve({ valid: true, user: JSON.parse(data) }); }
                     catch { resolve({ valid: false, error: "parse_error" }); }

@@ -49,18 +49,13 @@ const settings = definePluginSettings({
     }
 });
 
-function log(message: string, level: "info" | "warn" | "error" = "info") {
-    const timestamp = new Date().toLocaleTimeString();
-    const prefix = `[AntiGroup ${timestamp}]`;
-    switch (level) {
-        case "warn": console.warn(prefix, message); break;
-        case "error": console.error(prefix, message); break;
-        default: console.log(prefix, message);
-    }
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+function log(_message: string, _level: "info" | "warn" | "error" = "info") {
+    // Silent in production
 }
 
-function verboseLog(message: string) {
-    if (settings.store.verboseLogs) log(message);
+function verboseLog(_message: string) {
+    // Silent in production
 }
 
 async function leaveGroupDM(channelId: string) {

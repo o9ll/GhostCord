@@ -112,7 +112,19 @@ function init() {
     if (isDeckGameMode) nativeTheme.themeSource = "dark";
 
     app.whenReady().then(async () => {
-        if (process.platform === "win32") app.setAppUserModelId("org.Nightcord.Nightcord");
+        if (process.platform === "win32") {
+            // Use Discord's own AUMID so Windows associates the pinned taskbar shortcut
+            // (which points to Discord stable's exe) with this process instead of
+            // launching a second separate Discord window alongside Nightcord.
+            const discordBranch = Settings.store.discordBranch ?? "stable";
+            const aumidMap: Record<string, string> = {
+                stable: "com.squirrel.Discord.Discord",
+                canary: "com.squirrel.DiscordCanary.DiscordCanary",
+                ptb: "com.squirrel.DiscordPTB.DiscordPTB",
+            };
+            const aumid = aumidMap[discordBranch] ?? "com.squirrel.Discord.Discord";
+            app.setAppUserModelId(aumid);
+        }
 
         registerScreenShareHandler();
         registerMediaPermissionsHandler();

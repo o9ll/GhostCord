@@ -226,8 +226,34 @@ ipcMain.handle(IpcEvents.WORLD_BOMB_SEQUENCE, async (
     const safeLps = Math.max(1, Math.min(100, lps));
     const safeHumanChance = Math.max(0, Math.min(100, humanChance));
 
-    const win = BrowserWindow.fromWebContents(event.sender);
-    const bounds = win?.getBounds() ?? { x: 0, y: 0, width: 1280, height: 720 };
+    let targetWindow = BrowserWindow.fromWebContents(event.sender);
+    let mainHwnd = 0;
+    if (streamProofWindow && targetWindow === streamProofWindow) {
+        const allWins = BrowserWindow.getAllWindows();
+        const mainWin = allWins.find(w => w !== streamProofWindow && !w.isDestroyed());
+        if (mainWin) {
+            targetWindow = mainWin;
+            try {
+                const handleBuf = mainWin.getNativeWindowHandle();
+                if (handleBuf && handleBuf.length >= 4) {
+                    mainHwnd = handleBuf.readInt32LE(0);
+                }
+            } catch (err) {
+                console.error("Error reading main window handle:", err);
+            }
+        }
+    } else if (targetWindow) {
+        try {
+            const handleBuf = targetWindow.getNativeWindowHandle();
+            if (handleBuf && handleBuf.length >= 4) {
+                mainHwnd = handleBuf.readInt32LE(0);
+            }
+        } catch (err) {
+            console.error("Error reading window handle:", err);
+        }
+    }
+
+    const bounds = targetWindow?.getBounds() ?? { x: 0, y: 0, width: 1280, height: 720 };
     const centerX = targetX >= 0 ? Math.round(targetX) : Math.round(bounds.x + bounds.width / 2);
     const centerY = targetY >= 0 ? Math.round(targetY) : Math.round(bounds.y + bounds.height / 2);
 
@@ -242,9 +268,17 @@ ipcMain.handle(IpcEvents.WORLD_BOMB_SEQUENCE, async (
         "  Add-Type -AssemblyName System.Drawing",
         "  $sig = '[DllImport(\"user32.dll\")] public static extern void mouse_event(uint a, uint b, uint c, uint d, uint e); [DllImport(\"user32.dll\")] public static extern bool SetForegroundWindow(IntPtr h); [DllImport(\"user32.dll\")] public static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, UIntPtr dwExtraInfo);'",
         "  Add-Type -MemberDefinition $sig -Name WinAPI -Namespace NC -ErrorAction SilentlyContinue",
-        "  $handle = [IntPtr]::Zero",
-        `  $proc = Get-Process -Id ${process.pid} -ErrorAction SilentlyContinue`,
-        "  if ($proc) { $handle = $proc.MainWindowHandle }",
+        "  $handle = [IntPtr]::Zero"
+    ];
+
+    if (mainHwnd > 0) {
+        lines.push(`  $handle = [IntPtr]${mainHwnd}`);
+    } else {
+        lines.push(`  $proc = Get-Process -Id ${process.pid} -ErrorAction SilentlyContinue`);
+        lines.push("  if ($proc) { $handle = $proc.MainWindowHandle }");
+    }
+
+    lines.push(
         "  if ($handle -ne [IntPtr]::Zero) {",
         "    [NC.WinAPI]::SetForegroundWindow($handle) | Out-Null",
         "    Start-Sleep -Milliseconds 10",
@@ -252,8 +286,8 @@ ipcMain.handle(IpcEvents.WORLD_BOMB_SEQUENCE, async (
         `  [System.Windows.Forms.Cursor]::Position = New-Object System.Drawing.Point(${centerX}, ${centerY})`,
         "  [NC.WinAPI]::mouse_event(2, 0, 0, 0, 0)",
         "  [NC.WinAPI]::mouse_event(4, 0, 0, 0, 0)",
-        "  Start-Sleep -Milliseconds 10",
-    ];
+        "  Start-Sleep -Milliseconds 10"
+    );
 
     for (const char of word) {
         if (safeHumanChance > 0) {
@@ -300,30 +334,32 @@ ipcMain.handle(IpcEvents.WORLD_BOMB_GET_CURSOR_POS, (event) => {
 });
 
 let streamProofWindow: BrowserWindow | null = null;
-ipcMain.handle(IpcEvents.WORLD_BOMB_OPEN_WINDOW, (event, lps: number = 50, humanChance: number = 10, safeMode: boolean = false, theme: string = "", playMode: string = "Normal", noSpace: boolean = false, groqKey: string = "") => {
+ipcMain.handle(IpcEvents.WORLD_BOMB_OPEN_WINDOW, (event, lps: number = 50, humanChance: number = 10, safeMode: boolean = false, theme: string = "", playMode: string = "Normal", noSpace: boolean = false, groqKey: string = "", words: string[] = [], streamProof: boolean = false) => {
     if (!validateSender(event)) throw new Error("Unauthorized IPC invocation");
     if (streamProofWindow) {
-        streamProofWindow.focus();
-        return;
+        streamProofWindow.close();
+        streamProofWindow = null;
+        return { status: "closed" };
     }
 
     streamProofWindow = new BrowserWindow({
-        width: 332,
-        height: 300,
+        width: 326,
+        height: 180,
         transparent: true,
         frame: false,
         alwaysOnTop: true,
-        resizable: false,
+        resizable: true,
         webPreferences: {
             nodeIntegration: false,
             contextIsolation: true,
             preload: join(__dirname, "worldbomb-preload.js"),
-            sandbox: false
+            sandbox: false,
+            webSecurity: false
         }
     });
 
     try {
-        streamProofWindow.setContentProtection(true);
+        streamProofWindow.setContentProtection(streamProof);
     } catch (e) {
         console.error("setContentProtection error:", e);
     }
@@ -334,144 +370,603 @@ ipcMain.handle(IpcEvents.WORLD_BOMB_OPEN_WINDOW, (event, lps: number = 50, human
 <head>
 <meta charset="utf-8">
 <style>
-body { margin: 0; padding: 16px; background: transparent; overflow: hidden; font-family: sans-serif; }
-.nc-wb-overlay { background: #1f2937; color: white; border-radius: 16px; padding: 16px; width: 300px; box-sizing: border-box; box-shadow: 0 10px 25px rgba(0,0,0,0.5); user-select: none; border: 1px solid #374151; }
-.nc-wb-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; -webkit-app-region: drag; }
-.nc-wb-close { cursor: pointer; opacity: 0.7; -webkit-app-region: no-drag; padding: 4px; }
-.nc-wb-close:hover { color: #ef4444; opacity: 1; }
-.nc-wb-alphabet { display: grid; grid-template-columns: repeat(9, 1fr); gap: 4px; margin-bottom: 15px; }
-.nc-wb-letter { font-size: 10px; text-align: center; opacity: 0.8; }
-.nc-wb-input { width: 100%; padding: 8px; border-radius: 8px; border: none; background: #374151; color: white; box-sizing: border-box; outline: none; }
-.nc-wb-input:focus { box-shadow: 0 0 0 2px #7c3aed; }
-.nc-wb-button { padding: 10px; background: #7c3aed; border: none; border-radius: 8px; color: white; cursor: pointer; width: 100%; font-weight: bold; }
-.nc-wb-button:hover { background: #6d28d9; }
+body { margin: 0; padding: 12px; background: transparent; overflow: hidden; font-family: system-ui, -apple-system, sans-serif; -webkit-app-region: no-drag; }
+* { -webkit-app-region: no-drag; }
+#drag-header { -webkit-app-region: drag; }
+.nc-wb-overlay {
+    position: relative;
+    background: #242528;
+    color: #dbdee1;
+    border-radius: 12px;
+    padding: 16px;
+    width: 300px;
+    box-sizing: border-box;
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
+    user-select: none;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.nc-wb-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+    width: calc(100% - 30px);
+    cursor: grab;
+}
+.nc-wb-header h3 {
+    margin: 0;
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #ffffff;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.nc-wb-close {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    cursor: pointer;
+    color: #b5bac1;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    font-size: 10px;
+    z-index: 99999;
+    -webkit-app-region: no-drag;
+}
+.nc-wb-close:hover {
+    color: #dbdee1;
+    background: rgba(78, 80, 88, 0.16);
+}
+.nc-wb-content {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.nc-wb-input-row {
+    display: flex;
+    gap: 8px;
+}
+.nc-wb-input {
+    flex: 1;
+    background: #1e1f22;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    padding: 8px 10px;
+    color: #dbdee1;
+    font-size: 14px;
+    outline: none;
+    box-sizing: border-box;
+}
+.nc-wb-input:focus {
+    border-color: #5865f2;
+}
+.nc-wb-button {
+    background: #5865f2;
+    color: #ffffff;
+    border: none;
+    border-radius: 6px;
+    padding: 8px 16px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+}
+.nc-wb-button:hover {
+    background: #4e5dcd;
+}
+.nc-wb-button:active {
+    background: #3c4aa9;
+}
+.nc-wb-status {
+    font-size: 11px;
+    color: #949ba4;
+    font-weight: 500;
+}
+.nc-wb-definition {
+    font-size: 11px;
+    line-height: 1.4;
+    color: #dbdee1;
+    background: #2b2d31;
+    padding: 8px 10px;
+    border-radius: 0 6px 6px 0;
+    border-left: 3px solid #5865f2;
+    max-height: 60px;
+    overflow-y: auto;
+}
+.nc-wb-definition::-webkit-scrollbar {
+    width: 4px;
+}
+.nc-wb-definition::-webkit-scrollbar-track {
+    background: transparent;
+}
+.nc-wb-definition::-webkit-scrollbar-thumb {
+    background: #4e5058;
+    border-radius: 2px;
+}
+.nc-wb-definition::-webkit-scrollbar-thumb:hover {
+    background: #6d6f78;
+}
+
+/* Settings styling */
+.nc-wb-range-container {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 8px;
+}
+.nc-wb-range-container label {
+    font-size: 11px;
+    font-weight: 600;
+    color: #949ba4;
+    text-transform: uppercase;
+}
+.nc-wb-range-val {
+    color: #dbdee1;
+    font-weight: 700;
+    float: right;
+}
+.nc-wb-slider {
+    -webkit-appearance: none;
+    width: 100%;
+    height: 6px;
+    border-radius: 3px;
+    background: #1e1f22;
+    outline: none;
+    margin: 4px 0;
+}
+.nc-wb-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: #5865f2;
+    cursor: pointer;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+.nc-wb-settings-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+.nc-wb-settings-info {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+.nc-wb-settings-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: #ffffff;
+}
+.nc-wb-settings-sublabel {
+    font-size: 10px;
+    color: #949ba4;
+}
+.nc-wb-switch {
+    position: relative;
+    display: inline-block;
+    width: 36px;
+    height: 20px;
+    cursor: pointer;
+}
+.nc-wb-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+.nc-wb-switch-slider {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-color: #80848e;
+    transition: .15s ease;
+    border-radius: 10px;
+}
+.nc-wb-switch-slider:before {
+    position: absolute;
+    content: "";
+    height: 14px;
+    width: 14px;
+    left: 3px;
+    bottom: 3px;
+    background-color: white;
+    transition: .15s ease;
+    border-radius: 50%;
+}
+input:checked + .nc-wb-switch-slider {
+    background-color: #23a55a;
+}
+input:checked + .nc-wb-switch-slider:before {
+    transform: translateX(16px);
+}
+
+/* Custom Dropdown select style */
+.nc-wb-select-custom {
+    position: relative;
+    width: 100%;
+}
+.nc-wb-select-trigger {
+    background: #1e1f22;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 6px;
+    padding: 8px 10px;
+    color: #dbdee1;
+    font-size: 13px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    box-sizing: border-box;
+}
+.nc-wb-select-trigger:hover {
+    border-color: rgba(255, 255, 255, 0.16);
+}
+.nc-wb-select-dropdown {
+    position: absolute;
+    bottom: calc(100% + 4px);
+    left: 0; right: 0;
+    background: #1e1f22;
+    border: 1px solid rgba(0, 0, 0, 0.2);
+    border-radius: 6px;
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.24);
+    z-index: 10000;
+    overflow: hidden;
+    padding: 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    box-sizing: border-box;
+}
+.nc-wb-select-option {
+    padding: 6px 10px;
+    color: #b5bac1;
+    font-size: 13px;
+    border-radius: 4px;
+    cursor: pointer;
+    text-align: left;
+    box-sizing: border-box;
+}
+.nc-wb-select-option:hover {
+    background: rgba(78, 80, 88, 0.16);
+    color: #dbdee1;
+}
+.nc-wb-select-option.selected {
+    background: #5865f2;
+    color: #ffffff;
+}
+
+/* Footer & Settings Toggle button */
+.nc-wb-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 10px;
+    padding-top: 8px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    -webkit-app-region: no-drag;
+    pointer-events: auto;
+}
+.nc-wb-settings-btn {
+    cursor: pointer;
+    color: #b5bac1;
+    font-size: 14px;
+    transition: color 0.15s ease, transform 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    -webkit-app-region: no-drag;
+    pointer-events: auto;
+    padding: 4px;
+}
+.nc-wb-settings-btn:hover {
+    color: #dbdee1;
+    transform: rotate(30deg);
+}
+.nc-wb-status-footer {
+    font-size: 10px;
+    color: #949ba4;
+    font-weight: 500;
+}
 </style>
 </head>
 <body>
 <div class="nc-wb-overlay">
+    <div class="nc-wb-close" id="btn-close">✕</div>
     <div class="nc-wb-header" id="drag-header">
-        <h3 style="margin: 0; font-size: 16px;">🎯 WorldBomb Helper</h3>
-        <div class="nc-wb-close" id="btn-close">✕</div>
+        <h3>🎯 WordBomb Helper</h3>
     </div>
-    <div class="nc-wb-content">
-        <div id="alphabet"></div>
-        <div style="display: flex; gap: 8px;">
-            <input type="text" id="syllable" placeholder="Syllabe..." autofocus autocomplete="off" spellcheck="false" />
-            <button id="btn-find">FIND</button>
+    
+    <!-- Home View -->
+    <div class="nc-wb-content" id="view-home">
+        <div class="nc-wb-input-row">
+            <input type="text" class="nc-wb-input" id="syllable" placeholder="Enter Syllable..." autofocus autocomplete="off" spellcheck="false" />
+            <button class="nc-wb-button" id="btn-find">FIND</button>
         </div>
-        <div id="status">Loading...</div>
-        <div id="definition-container" style="display: none; margin-top: 10px; font-size: 11px; color: #d1d5db; font-style: italic; background: #374151; padding: 8px; border-radius: 8px; max-height: 80px; overflow-y: auto;">
-            <strong style="color: #60a5fa">Definition:</strong> <span id="definition-text"></span>
+        <div class="nc-wb-status" id="status">Ready...</div>
+        <div id="definition-container" style="display: none;" class="nc-wb-definition">
+            <strong style="color: #5865f2">Definition:</strong> <span id="definition-text"></span>
         </div>
+    </div>
+
+    <!-- Settings View -->
+    <div class="nc-wb-content" id="view-settings" style="display: none;">
+        <div class="nc-wb-range-container">
+            <label>Speed (LPS) <span class="nc-wb-range-val" id="val-lps">50</span></label>
+            <input type="range" min="10" max="100" step="1" class="nc-wb-slider" id="slide-lps" />
+        </div>
+        <div class="nc-wb-range-container">
+            <label>Error Chance <span class="nc-wb-range-val" id="val-error">0%</span></label>
+            <input type="range" min="0" max="100" step="1" class="nc-wb-slider" id="slide-error" />
+        </div>
+        <div class="nc-wb-range-container">
+            <label>Theme (Optional)</label>
+            <input type="text" class="nc-wb-input" id="input-theme" placeholder="e.g. tech, nature..." />
+        </div>
+        <div class="nc-wb-range-container" style="margin-bottom: 12px;">
+            <label>Play Style</label>
+            <div class="nc-wb-select-custom" id="select-playmode">
+                <div class="nc-wb-select-trigger" id="playmode-trigger">
+                    <span id="playmode-label">Normal</span>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M7 10l5 5 5-5H7z"/>
+                    </svg>
+                </div>
+                <div class="nc-wb-select-dropdown" id="playmode-dropdown" style="display: none;">
+                    <div class="nc-wb-select-option" data-value="Normal">Normal</div>
+                    <div class="nc-wb-select-option" data-value="Pro">Pro Mod (Long & Complex)</div>
+                    <div class="nc-wb-select-option" data-value="Noob">Noob Mod (Short & Simple)</div>
+                </div>
+            </div>
+        </div>
+        <div class="nc-wb-settings-row">
+            <div class="nc-wb-settings-info">
+                <span class="nc-wb-settings-label">No Spaces or Dashes</span>
+                <span class="nc-wb-settings-sublabel">Do not type words with spaces/dashes</span>
+            </div>
+            <label class="nc-wb-switch">
+                <input type="checkbox" id="chk-nospace" />
+                <span class="nc-wb-switch-slider"></span>
+            </label>
+        </div>
+        <div class="nc-wb-settings-row">
+            <div class="nc-wb-settings-info">
+                <span class="nc-wb-settings-label">Safe Mode (Def.)</span>
+                <span class="nc-wb-settings-sublabel">Generate AI word definitions</span>
+            </div>
+            <label class="nc-wb-switch">
+                <input type="checkbox" id="chk-safemode" />
+                <span class="nc-wb-switch-slider"></span>
+            </label>
+        </div>
+        <div class="nc-wb-settings-row" style="margin-bottom: 12px;">
+            <div class="nc-wb-settings-info">
+                <span class="nc-wb-settings-label">StreamProof</span>
+                <span class="nc-wb-settings-sublabel">Hide window from stream capture</span>
+            </div>
+            <label class="nc-wb-switch">
+                <input type="checkbox" id="chk-streamproof" />
+                <span class="nc-wb-switch-slider"></span>
+            </label>
+        </div>
+        <button class="nc-wb-button" id="btn-back" style="width: 100%;">BACK</button>
+    </div>
+
+    <!-- Footer -->
+    <div class="nc-wb-footer">
+        <div class="nc-wb-settings-btn" id="btn-settings">⚙</div>
+        <div class="nc-wb-status-footer" id="status-footer">LPS: 50 | Error: 0%</div>
     </div>
 </div>
+
 <script>
-    let dictionary = [];
+    // Variables & settings
+    let dictionary = ${JSON.stringify(words)};
     let history = [];
     let badWords = new Set();
     let themeWords = new Set();
-    const lps = ${lps};
-    const humanChance = ${humanChance};
-    const safeMode = ${safeMode};
-    const theme = "${theme}";
-    const playMode = "${playMode}";
-    const noSpace = ${noSpace};
+    
+    // Load local storage settings or default values
+    const loadSetting = (key, def) => {
+        try {
+            const val = localStorage.getItem(key);
+            if (val !== null) return val;
+        } catch {}
+        return def;
+    };
+    const saveSetting = (key, val) => {
+        try { localStorage.setItem(key, String(val)); } catch {}
+    };
+
+    let lps = parseFloat(loadSetting('wb_lps', '${lps}'));
+    let humanChance = parseInt(loadSetting('wb_humanChance', '${humanChance}'));
+    let safeMode = loadSetting('wb_safeMode', '${safeMode}') === 'true';
+    let theme = loadSetting('wb_theme', '${theme}');
+    let playMode = loadSetting('wb_playMode', '${playMode}');
+    let noSpace = loadSetting('wb_noSpace', '${noSpace}') === 'true';
+    let streamProof = loadSetting('wb_streamProof', '${streamProof}') === 'true';
     const groqKey = "${groqKey}";
-    
-    const dictUrls = [
-        "https://raw.githubusercontent.com/words/an-array-of-french-words/master/index.json",
-        "https://raw.githubusercontent.com/kkrypt0nn/wordlists/refs/heads/main/wordlists/languages/french.txt",
-        "https://raw.githubusercontent.com/Taknok/French-Wordlist/refs/heads/master/francais.txt",
-        "https://raw.githubusercontent.com/hbenbel/French-Dictionary/refs/heads/master/dictionary/dictionary.csv"
-    ];
-    
 
-    Promise.all(dictUrls.map(url => fetch(url).then(async res => {
-        if (!res.ok) return [];
-        if (url.endsWith('.json')) return await res.json();
-        const text = await res.text();
-        return text.split(/[\r\n]+/).filter(w => w.length > 0);
-    }).catch(() => [])))
-        .then(results => {
-            const allWords = results.flat();
-            dictionary = Array.from(new Set(allWords.map(w => w.toLowerCase())))
-                .filter(w => /^[a-zœæéèêëàâäîïôöùûüç]+$/i.test(w));
-            document.getElementById('status').innerText = "Ready (" + dictionary.length + " words)";
-        }).catch(err => {
-            document.getElementById('status').innerText = "Network error";
-            document.getElementById('status').style.color = "#ef4444";
-        });
+    // Set initial UI states
+    document.getElementById('status').innerText = "Ready (" + dictionary.length + " words)";
+    document.getElementById('status-footer').innerText = "LPS: " + lps + " | Error: " + humanChance + "%";
+    
+    // Setup inputs values in settings
+    document.getElementById('slide-lps').value = lps;
+    document.getElementById('val-lps').innerText = lps;
+    document.getElementById('slide-error').value = humanChance;
+    document.getElementById('val-error').innerText = humanChance + "%";
+    document.getElementById('input-theme').value = theme;
+    document.getElementById('chk-nospace').checked = noSpace;
+    document.getElementById('chk-safemode').checked = safeMode;
+    document.getElementById('chk-streamproof').checked = streamProof;
+    window.worldBombAPI.setStreamProof(streamProof);
+    
+    // Setup PlayMode selected
+    const trigger = document.getElementById('playmode-trigger');
+    const dropdown = document.getElementById('playmode-dropdown');
+    const playmodeLabel = document.getElementById('playmode-label');
+    
+    // Set playmode trigger label text
+    const styleOptions = {
+        'Normal': 'Normal',
+        'Pro': 'Pro Mod (Long & Complex)',
+        'Noob': 'Noob Mod (Short & Simple)'
+    };
+    playmodeLabel.innerText = styleOptions[playMode] || 'Normal';
+    document.querySelectorAll('.nc-wb-select-option').forEach(o => {
+        if (o.getAttribute('data-value') === playMode) o.classList.add('selected');
+        else o.classList.remove('selected');
+    });
 
-    if (theme.trim().length > 0) {
-        fetch("https://fr.wikipedia.org/w/api.php?action=query&list=search&srsearch=" + encodeURIComponent(theme) + "&utf8=&format=json&srlimit=1")
-            .then(r => r.json())
-            .then(d => {
-                if (d.query && d.query.search && d.query.search[0] && d.query.search[0].pageid) {
-                    const pageId = d.query.search[0].pageid;
-                    return fetch("https://fr.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&pageids=" + pageId + "&format=json");
-                }
-                throw new Error("No page");
-            })
-            .then(r => r.json())
-            .then(d => {
-                const pages = d.query && d.query.pages;
-                if (pages) {
-                    const textObj = Object.values(pages)[0];
-                    if (textObj && textObj.extract) {
-                        const words = textObj.extract.toLowerCase().match(/[a-zàâçéèêëîïôûùüÿñæœ]+/g) || [];
-                        words.forEach(w => {
-                            if (w.length > 3) themeWords.add(w);
-                        });
-                        if (themeWords.size > 0) {
-                            const st = document.getElementById('status');
-                            st.innerText = st.innerText + " (+ Theme)";
+    // Theme fetching
+    function fetchTheme() {
+        if (theme.trim().length > 0) {
+            fetch("https://fr.wikipedia.org/w/api.php?action=query&list=search&srsearch=" + encodeURIComponent(theme) + "&utf8=&format=json&srlimit=1")
+                .then(r => r.json())
+                .then(d => {
+                    if (d.query && d.query.search && d.query.search[0] && d.query.search[0].pageid) {
+                        const pageId = d.query.search[0].pageid;
+                        return fetch("https://fr.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&pageids=" + pageId + "&format=json");
+                    }
+                    throw new Error("No page");
+                })
+                .then(r => r.json())
+                .then(d => {
+                    const pages = d.query && d.query.pages;
+                    if (pages) {
+                        const textObj = Object.values(pages)[0];
+                        if (textObj && textObj.extract) {
+                            themeWords.clear();
+                            const words = textObj.extract.toLowerCase().match(/[a-zàâçéèêëîïôûùüÿñæœ]+/g) || [];
+                            words.forEach(w => {
+                                if (w.length > 3) themeWords.add(w);
+                            });
+                            if (themeWords.size > 0) {
+                                document.getElementById('status').innerText = "Ready (" + dictionary.length + " words) (+ Theme)";
+                            }
                         }
                     }
-                }
-            }).catch(e => console.error("Theme fetch error:", e));
+                }).catch(e => console.error("Theme fetch error:", e));
+        }
     }
+    fetchTheme();
 
-    const alphabetEl = document.getElementById('alphabet');
+    // Toggle Settings panel
+    let isSettingsOpen = false;
+    const homeView = document.getElementById('view-home');
+    const settingsView = document.getElementById('view-settings');
+    const btnSettings = document.getElementById('btn-settings');
+    
+    function toggleSettings() {
+        isSettingsOpen = !isSettingsOpen;
+        if (isSettingsOpen) {
+            homeView.style.display = 'none';
+            settingsView.style.display = 'flex';
+            btnSettings.innerText = '✕';
+            window.worldBombAPI.resize(326, 450);
+        } else {
+            settingsView.style.display = 'none';
+            homeView.style.display = 'flex';
+            btnSettings.innerText = '⚙';
+            
+            // Adjust height based on definition container visibility
+            const hasDef = document.getElementById('definition-container').style.display !== 'none';
+            window.worldBombAPI.resize(326, hasDef ? 220 : 180);
+            setTimeout(() => document.getElementById('syllable').focus(), 50);
+        }
+    }
+    btnSettings.onclick = toggleSettings;
+    document.getElementById('btn-back').onclick = toggleSettings;
+
+    // Trigger settings updates
+    document.getElementById('slide-lps').oninput = (e) => {
+        lps = parseFloat(e.target.value);
+        document.getElementById('val-lps').innerText = lps;
+        document.getElementById('status-footer').innerText = "LPS: " + lps + " | Error: " + humanChance + "%";
+        saveSetting('wb_lps', lps);
+    };
+    document.getElementById('slide-error').oninput = (e) => {
+        humanChance = parseInt(e.target.value);
+        document.getElementById('val-error').innerText = humanChance + "%";
+        document.getElementById('status-footer').innerText = "LPS: " + lps + " | Error: " + humanChance + "%";
+        saveSetting('wb_humanChance', humanChance);
+    };
+    document.getElementById('input-theme').onchange = (e) => {
+        theme = e.target.value.toLowerCase().trim();
+        saveSetting('wb_theme', theme);
+        fetchTheme();
+    };
+    document.getElementById('chk-nospace').onchange = (e) => {
+        noSpace = e.target.checked;
+        saveSetting('wb_noSpace', noSpace);
+    };
+    document.getElementById('chk-safemode').onchange = (e) => {
+        safeMode = e.target.checked;
+        saveSetting('wb_safeMode', safeMode);
+        if (!safeMode) document.getElementById('definition-container').style.display = 'none';
+    };
+    document.getElementById('chk-streamproof').onchange = (e) => {
+        streamProof = e.target.checked;
+        saveSetting('wb_streamProof', streamProof);
+        window.worldBombAPI.setStreamProof(streamProof);
+    };
+
+    // Custom select trigger
+    trigger.onclick = (e) => {
+        e.stopPropagation();
+        const isOpen = dropdown.style.display === 'flex';
+        dropdown.style.display = isOpen ? 'none' : 'flex';
+        trigger.style.borderColor = isOpen ? 'rgba(255, 255, 255, 0.08)' : '#5865f2';
+    };
+    document.addEventListener('click', () => {
+        dropdown.style.display = 'none';
+        trigger.style.borderColor = 'rgba(255, 255, 255, 0.08)';
+    });
+    document.querySelectorAll('.nc-wb-select-option').forEach(opt => {
+        opt.onclick = (e) => {
+            e.stopPropagation();
+            const val = opt.getAttribute('data-value');
+            playMode = val;
+            playmodeLabel.innerText = opt.innerText;
+            dropdown.style.display = 'none';
+            trigger.style.borderColor = 'rgba(255, 255, 255, 0.08)';
+            saveSetting('wb_playMode', val);
+            document.querySelectorAll('.nc-wb-select-option').forEach(o => o.classList.remove('selected'));
+            opt.classList.add('selected');
+        };
+    });
+
+    // FIND / Search Logic
     const letters = "abcdefghijklmnopqrstuvwxyz-".split("");
-    function renderAlphabet() {
-        alphabetEl.innerHTML = "";
-        const missing = getMissingAlphabet();
-        letters.forEach(l => {
-            const span = document.createElement('span');
-            span.className = 'nc-wb-letter';
-            span.innerText = l.toUpperCase();
-            if (missing.includes(l)) {
-                span.style.color = '#ef4444';
-                span.style.fontWeight = 'bold';
-                span.style.opacity = '1';
-            }
-            alphabetEl.appendChild(span);
-        });
-    }
-
     function getMissingAlphabet() {
         if (history.length === 0) return letters;
         return history[history.length - 1].alphabet;
     }
-
-    renderAlphabet();
 
     function computeScore(word, currentMissing) {
         let score = 0;
         let found = new Set();
         for (let char of word) {
             if (currentMissing.includes(char) && !found.has(char)) {
-                score++;
+                score += 100;
                 found.add(char);
             }
         }
         if (themeWords.has(word)) {
-            score += 100;
+            score += 1000;
         }
         if (playMode === "Pro") {
-            score += word.length;
+            score += word.length * 5;
         } else if (playMode === "Noob") {
-            score -= word.length;
+            score -= word.length * 10;
         }
         return score;
     }
@@ -500,13 +995,12 @@ body { margin: 0; padding: 16px; background: transparent; overflow: hidden; font
         
         const bestWord = validWords[0];
         document.getElementById('status').innerText = "Typing: " + bestWord + "...";
-        document.getElementById('status').style.color = "#10b981";
+        document.getElementById('status').style.color = "#5865f2";
         
         let newMissing = currentMissing.filter(c => !bestWord.includes(c));
         if (newMissing.length === 0) newMissing = letters;
         history.push({ alphabet: newMissing, word: bestWord });
         badWords.add(bestWord);
-        renderAlphabet();
         
         document.getElementById('syllable').value = "";
         document.body.style.pointerEvents = "none";
@@ -517,6 +1011,9 @@ body { margin: 0; padding: 16px; background: transparent; overflow: hidden; font
             defContainer.style.display = 'block';
             defText.innerText = 'Generating AI definition...';
             
+            // Adjust height since definition container is shown
+            if (!isSettingsOpen) window.worldBombAPI.resize(326, 220);
+
             if (!groqKey) {
                 defText.innerText = "Error: Groq API key not found.";
             } else {
@@ -532,7 +1029,7 @@ body { margin: 0; padding: 16px; background: transparent; overflow: hidden; font
                         max_tokens: 150,
                         messages: [{
                             role: "user",
-                            content: 'Give a very short definition (1 simple sentence) for the following word, explaining what it is concretely, without stating its part of speech. Word: "' + bestWord + '"'
+                            content: 'Give a very short definition (1 simple sentence) for the following word in French, explaining what it is concretely. Word: "' + bestWord + '"'
                         }]
                     }),
                 })
@@ -547,14 +1044,25 @@ body { margin: 0; padding: 16px; background: transparent; overflow: hidden; font
                 })
                 .catch(() => defText.innerText = "Network error.");
             }
+        } else {
+            document.getElementById('definition-container').style.display = 'none';
+            if (!isSettingsOpen) window.worldBombAPI.resize(326, 180);
         }
-        
+
+        let timeoutId = setTimeout(() => {
+            document.body.style.pointerEvents = "auto";
+            document.getElementById('status').innerText = "Ready (Timeout)";
+            document.getElementById('status').style.color = "#ef4444";
+            document.getElementById('syllable').focus();
+        }, 5000);
 
         window.worldBombAPI.sequence(bestWord, lps, humanChance)
             .then(() => {
+                clearTimeout(timeoutId);
                 document.getElementById('status').innerText = "Ready!";
             })
             .catch(err => {
+                clearTimeout(timeoutId);
                 document.getElementById('status').innerText = "Input error";
                 document.getElementById('status').style.color = "#ef4444";
             })
@@ -565,6 +1073,9 @@ body { margin: 0; padding: 16px; background: transparent; overflow: hidden; font
     }
 
     document.getElementById('btn-find').onclick = processSearch;
+    document.getElementById('btn-close').onclick = () => {
+        window.worldBombAPI.closeWindow();
+    };
     document.getElementById('syllable').onkeydown = (e) => {
         if (e.key === "Enter") {
             e.preventDefault();
@@ -584,7 +1095,6 @@ body { margin: 0; padding: 16px; background: transparent; overflow: hidden; font
         writeFileSync(htmlPath, htmlContent, "utf-8");
         streamProofWindow.loadFile(htmlPath);
     } catch (e) {
-
         streamProofWindow.loadURL("data:text/html;charset=utf-8," + encodeURIComponent(htmlContent));
     }
 
@@ -592,6 +1102,48 @@ body { margin: 0; padding: 16px; background: transparent; overflow: hidden; font
         streamProofWindow = null;
     });
 });
+
+ipcMain.on(IpcEvents.WORLD_BOMB_CLOSE_WINDOW, () => {
+    if (streamProofWindow) {
+        streamProofWindow.close();
+        streamProofWindow = null;
+    }
+});
+
+ipcMain.on(IpcEvents.WORLD_BOMB_SET_STREAM_PROOF, (event, enabled: boolean) => {
+    if (streamProofWindow) {
+        try {
+            streamProofWindow.setContentProtection(enabled);
+        } catch (e) {
+            console.error("setContentProtection error:", e);
+        }
+    }
+});
+
+ipcMain.on(IpcEvents.WORLD_BOMB_RESIZE_WINDOW, (event, width: number, height: number) => {
+    if (streamProofWindow) {
+        try {
+            streamProofWindow.setSize(width, height);
+        } catch (e) {
+            console.error("setSize error:", e);
+        }
+    }
+});
+
+ipcMain.handle(IpcEvents.SET_CONTENT_PROTECTION, (event, enabled: boolean) => {
+    if (!validateSender(event)) throw new Error("Unauthorized IPC invocation");
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (win) {
+        try {
+            win.setContentProtection(enabled);
+            return true;
+        } catch (e) {
+            console.error("Failed to set content protection:", e);
+        }
+    }
+    return false;
+});
+
 ipcMain.handle(IpcEvents.OPEN_QUICKCSS, (event) => {
     if (!validateSender(event)) throw new Error("Unauthorized IPC invocation");
     return shell.openPath(QUICK_CSS_PATH);

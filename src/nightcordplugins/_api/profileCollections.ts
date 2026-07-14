@@ -19,7 +19,6 @@ export default definePlugin({
     authors: [Devs.thororen],
     enabledByDefault: true,
     start() {
-        console.log("[Nightcord ProfileCollectionsAPI] Started");
         (Vencord.Api as any).ProfileCollections = ProfileCollections;
     },
     patches: [
@@ -33,7 +32,7 @@ export default definePlugin({
         {
             find: '"UserProfileAccountPopout"',
             replacement: {
-                match: /user:\i,widgets:.{0,100}}\),/,
+                match: /user:(\i),widgets:.{0,100}?\}\),/,
                 replace: "Vencord.Api?.ProfileCollections?.renderProfileCollections?.({...arguments[0], original: $&}) ?? $&",
             },
         },

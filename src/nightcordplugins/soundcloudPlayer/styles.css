@@ -192,6 +192,29 @@
     color: #c084fc;
 }
 
+/* Label-restricted / Go+ tracks */
+.sc-track-snipped {
+    opacity: 0.45;
+    cursor: default;
+}
+
+.sc-track-snipped:hover {
+    background: transparent !important;
+}
+
+.sc-track-snipped .sc-play-btn {
+    opacity: 0.3;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+.sc-snipped-badge {
+    font-size: 10px;
+    margin-left: 4px;
+    vertical-align: middle;
+    opacity: 0.8;
+}
+
 .sc-artwork {
     width: 40px;
     height: 40px;

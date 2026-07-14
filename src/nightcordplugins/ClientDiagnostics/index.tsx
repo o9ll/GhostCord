@@ -1641,7 +1641,7 @@ function GuidePage() {
                     {t("Client Diagnostics helps find plugins that may cause lag, freezes, or extra memory usage. It measures time spent inside plugin functions, JavaScript memory growth, and resources that remain active.")}
                 </BaseText>
                 <BaseText size="sm" color="text-muted">
-                    {t("The numbers are samples collected while you use Illegalcord. If a plugin is not used during collection, it may look light even if it does more work in other situations.")}
+                    {t("The numbers are samples collected while you use Nightcord. If a plugin is not used during collection, it may look light even if it does more work in other situations.")}
                 </BaseText>
             </div>
 

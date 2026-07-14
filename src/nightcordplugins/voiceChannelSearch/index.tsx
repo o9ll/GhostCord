@@ -27,6 +27,7 @@ interface VoiceChannel {
     canAccess: boolean; // false = channel visible but no permission to join
     // Pre-built unique search index: "channel name · server name"
     searchIndex: string;
+    memberIds?: string[];
 }
 
 // Scan cache — avoids rescanning if done recently
@@ -42,12 +43,19 @@ async function scan(): Promise<VoiceChannel[]> {
         setTimeout(() => {
             try {
                 const memberCount: Record<string, number> = {};
+                const memberIds: Record<string, string[]> = {};
                 try {
                     const all: any = VoiceStateStore.getAllVoiceStates?.() ?? {};
                     for (const gId in all) {
                         for (const uId in all[gId]) {
                             const cid = all[gId][uId]?.channelId;
-                            if (cid) memberCount[cid] = (memberCount[cid] ?? 0) + 1;
+                            if (cid) {
+                                memberCount[cid] = (memberCount[cid] ?? 0) + 1;
+                                if (!memberIds[cid]) memberIds[cid] = [];
+                                if (memberIds[cid].length < 5) {
+                                    memberIds[cid].push(uId);
+                                }
+                            }
                         }
                     }
                 } catch { }
@@ -87,6 +95,7 @@ async function scan(): Promise<VoiceChannel[]> {
                                 memberCount: memberCount[ch.id] ?? 0,
                                 canAccess: true,
                                 searchIndex: `${cName.toLowerCase()} ${gName.toLowerCase()}`,
+                                memberIds: memberIds[ch.id] ?? [],
                             });
                         }
                     }
@@ -226,18 +235,12 @@ function VoiceSearchModal({ rootProps, channels }: { rootProps: any; channels: V
                                                 <div className="vcs-members-info">
                                                     <span className="vcs-members-count"> · {ch.memberCount}</span>
                                                     <div className="vcs-member-avatars">
-                                                        {(() => {
-                                                            const allStates = VoiceStateStore.getAllVoiceStates();
-                                                            const guildStates = allStates[ch.guildId] || {};
-                                                            const channelStates = Object.values(guildStates).filter((s: any) => s.channelId === ch.channelId);
-
-                                                            return channelStates.slice(0, 10).map((s: any) => {
-                                                                const user = UserStore.getUser(s.userId);
-                                                                if (!user) return null;
-                                                                const avatarUrl = user.getAvatarURL(ch.guildId, 16);
-                                                                return <img key={s.userId} src={avatarUrl} className="vcs-member-avatar" />;
-                                                            });
-                                                        })()}
+                                                        {ch.memberIds?.map((uId: string) => {
+                                                            const user = UserStore.getUser(uId);
+                                                            if (!user) return null;
+                                                            const avatarUrl = user.getAvatarURL(ch.guildId, 16);
+                                                            return <img key={uId} src={avatarUrl} className="vcs-member-avatar" />;
+                                                        })}
                                                     </div>
                                                 </div>
                                             )}

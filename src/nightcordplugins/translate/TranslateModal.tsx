@@ -64,14 +64,14 @@ function LanguageSelect({ settingsKey, includeAuto }: { settingsKey: typeof Lang
 }
 
 function AutoTranslateToggle() {
-    const value = settings.use(["autoTranslate"]).autoTranslate;
+    const value = settings.use(["autoTranslateReceived"]).autoTranslateReceived;
 
     return (
         <FormSwitch
-            title="Auto Translate"
-            description={settings.def.autoTranslate.description}
+            title="Auto Translate Received Messages"
+            description="Automatically translate incoming messages to the selected target language."
             value={value}
-            onChange={v => settings.store.autoTranslate = v}
+            onChange={v => settings.store.autoTranslateReceived = v}
             hideBorder
         />
     );

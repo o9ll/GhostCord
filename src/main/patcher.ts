@@ -147,6 +147,14 @@ if (!IS_VANILLA) {
 
                 super(options);
 
+                if (settings.streamProof) {
+                    try {
+                        this.setContentProtection(true);
+                    } catch (e) {
+                        console.error("Failed to set content protection on startup:", e);
+                    }
+                }
+
                 const isTransparent = !!options.transparent;
                 let isFakeFullScreen = false;
                 let originalBounds: electron.Rectangle | null = null;

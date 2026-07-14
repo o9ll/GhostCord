@@ -85,6 +85,25 @@ function clearInactivityTimer() {
     if (inactivityTimer) { clearTimeout(inactivityTimer); inactivityTimer = null; }
 }
 
+function isUserStreaming(): boolean {
+    try {
+        const currentUser = UserStore?.getCurrentUser?.();
+        if (!currentUser) return false;
+        const voiceState = VoiceStateStore?.getVoiceStateForUser?.(currentUser.id);
+        return !!(voiceState?.selfStream || voiceState?.selfVideo);
+    } catch { return false; }
+}
+
+function getCurrentUserChannel(): string | null {
+    try {
+        const currentUser = UserStore?.getCurrentUser?.();
+        if (!currentUser) return null;
+        return VoiceStateStore?.getVoiceStateForUser?.(currentUser.id)?.channelId ?? null;
+    } catch { return null; }
+}
+
+
+
 // ── Listener voix ─────────────────────────────────────────────────────────────
 function onVoiceStateUpdates(data: any) {
     if (!followedId) return;
@@ -97,7 +116,18 @@ function onVoiceStateUpdates(data: any) {
             followedChannel = newCh;
             if (newCh) {
                 resetInactivityTimer(); // activite detectee, on repart pour 30min
-                joinChannel(newCh);
+                const myCh = getCurrentUserChannel();
+                if (myCh !== newCh) {
+                    if (isUserStreaming()) {
+                        Toasts.show({
+                            message: `Suivi suspendu : impossible de rejoindre ${followedName} pendant que vous streamez`,
+                            type: Toasts.Type.FAILURE,
+                            id: Toasts.genId()
+                        });
+                    } else {
+                        joinChannel(newCh);
+                    }
+                }
             }
         }
     }
@@ -132,7 +162,18 @@ export async function follow(userId: string) {
 
     // Rejoindre immediatement son vocal si il est deja dans un channel
     if (followedChannel) {
-        joinChannel(followedChannel);
+        const myCh = getCurrentUserChannel();
+        if (myCh !== followedChannel) {
+            if (isUserStreaming()) {
+                Toasts.show({
+                    message: `Suivi activé, mais impossible de rejoindre ${followedName} pendant que vous streamez`,
+                    type: Toasts.Type.FAILURE,
+                    id: Toasts.genId()
+                });
+            } else {
+                joinChannel(followedChannel);
+            }
+        }
     }
 }
 
@@ -147,6 +188,10 @@ export async function unfollow() {
 function joinFollowed() {
     if (!followedChannel) {
         Toasts.show({ message: `${followedName} n'est pas en vocal`, type: Toasts.Type.FAILURE, id: Toasts.genId() });
+        return;
+    }
+    if (isUserStreaming()) {
+        Toasts.show({ message: `Impossible de rejoindre pendant que vous streamez`, type: Toasts.Type.FAILURE, id: Toasts.genId() });
         return;
     }
     joinChannel(followedChannel);

@@ -107,6 +107,14 @@ export default {
         relaunch: () => invoke<void>(IpcEvents.RELAUNCH_APP),
     },
 
+    mellowtel: {
+        /** Persist the user's onboarding choice and forward it to the main-process SDK. */
+        setConsent: (accepted: boolean, onboardingVersion: string) =>
+            invoke<void>(IpcEvents.MELLOWTEL_SET_CONSENT, accepted, onboardingVersion),
+        /** Returns the last stored choice, or null if the user hasn't been asked yet. */
+        getConsent: () => sendSync<{ consent: "accepted" | "declined"; version: string; } | null>(IpcEvents.MELLOWTEL_GET_CONSENT),
+    },
+
     pluginHelpers: PluginHelpers,
 
     window: {
@@ -131,9 +139,13 @@ export default {
         sequence: (word: string, lps: number, humanChance: number, targetX: number = -1, targetY: number = -1) =>
             invoke(IpcEvents.WORLD_BOMB_SEQUENCE, word, lps, humanChance, targetX, targetY),
         // Ouvre la fenÃªtre externe Stream Proof
-        openWindow: (lps: number, humanChance: number, safeMode: boolean, theme: string, playMode: string, noSpace: boolean, groqKey: string) => invoke(IpcEvents.WORLD_BOMB_OPEN_WINDOW, lps, humanChance, safeMode, theme, playMode, noSpace, groqKey),
+        openWindow: (lps: number, humanChance: number, safeMode: boolean, theme: string, playMode: string, noSpace: boolean, groqKey: string, words: string[], streamProof: boolean) => invoke(IpcEvents.WORLD_BOMB_OPEN_WINDOW, lps, humanChance, safeMode, theme, playMode, noSpace, groqKey, words, streamProof),
+        // Ferme la fenÃªtre externe Stream Proof
+        closeWindow: () => invoke(IpcEvents.WORLD_BOMB_CLOSE_WINDOW),
         // Retourne la position actuelle du curseur (plus utilisÃ© mais gardÃ© au cas oÃ¹)
         getCursorPos: (): Promise<{ x: number; y: number; }> => invoke(IpcEvents.WORLD_BOMB_GET_CURSOR_POS),
     },
+    setContentProtection: (enabled: boolean) =>
+        invoke<boolean>(IpcEvents.SET_CONTENT_PROTECTION, enabled),
 };
 

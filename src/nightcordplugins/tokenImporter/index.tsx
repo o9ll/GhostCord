@@ -381,8 +381,27 @@ function TokenModal({ rootProps }: { rootProps: any; }) {
                             <button className="ti-verify-btn" style={{ marginRight: 6, opacity: copied ? 0.7 : 1 }} onClick={() => { copyMyToken(); setCopied(true); setTimeout(() => setCopied(false), 1500); }}>
                                 {copied ? "Copied ✓" : "My Token"}
                             </button>
-                            <button className="ti-verify-btn" onClick={verifyAll} disabled={verifying || !loaded}>
-                                {verifying ? "Stopping..." : "Verify all"}
+
+                            <button
+                                className="ti-verify-btn"
+                                disabled={!loaded || accounts.length === 0}
+                                title="Download all saved tokens as a .txt file"
+                                onClick={() => {
+                                    const lines = accounts.map(a =>
+                                        `${a.username}${a.discriminator && a.discriminator !== "0" ? "#" + a.discriminator : ""}:${a.token}`
+                                    ).join("\n");
+                                    const blob = new Blob([lines], { type: "text/plain;charset=utf-8" });
+                                    const url = URL.createObjectURL(blob);
+                                    const link = document.createElement("a");
+                                    link.href = url;
+                                    link.download = `tokens_${new Date().toISOString().slice(0, 10)}.txt`;
+                                    document.body.appendChild(link);
+                                    link.click();
+                                    document.body.removeChild(link);
+                                    URL.revokeObjectURL(url);
+                                }}
+                            >
+                                Download .txt
                             </button>
                         </div>
                         {!loaded ? <div className="ti-empty" style={{ opacity: 0.5 }}>Loading accounts...</div>

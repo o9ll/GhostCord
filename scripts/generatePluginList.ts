@@ -42,10 +42,13 @@ import { getEntryPoint, isPluginFile, parseDevs, parseEquicordDevs, parseFile, P
 
     const equicordFlag = args.includes("--equicord");
     const vencordFlag = args.includes("--vencord");
+    const nightcordFlag = args.includes("--nightcord");
 
     let dirs: string[];
 
-    if (equicordFlag) {
+    if (nightcordFlag) {
+        dirs = ["src/nightcordplugins"];
+    } else if (equicordFlag) {
         dirs = ["src/nightcordplugins", "src/userplugins"];
     } else if (vencordFlag) {
         dirs = ["src/plugins", "src/plugins/_core"];

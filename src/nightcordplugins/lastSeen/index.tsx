@@ -41,10 +41,6 @@ function setLastSeen(userId: string, ts: number) {
         if (ts - lastWritten > 60000) {
             lastWrittenCache.set(userId, ts);
             DataStore.set(STORAGE_PREFIX + userId, ts).catch(() => {});
-            
-            if (userId === "1462402007305425039" || userId === "1097178374809587835") {
-                console.log(`[LastSeen DEBUG] SAVED TIMESTAMP FOR ${userId} ->`, new Date(ts).toLocaleTimeString());
-            }
         }
     } catch (e) {
         console.error(`[LastSeen ERROR] Failed to save timestamp for ${userId}:`, e);
@@ -88,7 +84,6 @@ function handlePresenceEntry(entry: any) {
     if (!userId) return;
 
     if (userId === "1462402007305425039") {
-        console.log("[LastSeen DEBUG] Received presence entry for lonely with wifi!", entry);
     }
 
     // Whatever the event is (online, idle, dnd, offline), it means Discord
@@ -222,7 +217,6 @@ export default definePlugin({
         FluxDispatcher.subscribe("VOICE_STATE_UPDATES", onVoiceStateUpdates);
         FluxDispatcher.subscribe("TYPING_START", onTypingStart);
         FluxDispatcher.subscribe("MESSAGE_REACTION_ADD", onReactionAdd);
-        console.log("[LastSeen] Subscribed to all events.");
     },
 
     stop() {

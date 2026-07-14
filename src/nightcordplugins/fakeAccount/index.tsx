@@ -109,7 +109,6 @@ function patchStore() {
     };
 
     _store.getHasLoggedInAccounts = () => true;
-    console.log("[FakeAccount] Store patched ✅");
 }
 
 function unpatchStore() {
@@ -168,7 +167,6 @@ function simulateSwitch(fake: any) {
     } catch { }
 
     _store?.emitChange?.();
-    console.log("[FakeAccount] ✅ Profile changed:", fake.username);
 }
 
 // ── restoreRealAccount ─────────────────────────────────────────────────────
@@ -206,25 +204,20 @@ function restoreRealAccount() {
     } catch { }
 
     _store?.emitChange?.();
-    console.log("[FakeAccount] ✅ Profile restored");
 }
 
 // ── Switch action subscriptions ──────────────────────────────────
 function onSwitchFailure(action: any) {
-    console.log("[FakeAccount] SWITCH_FAILURE action:", JSON.stringify(action));
     const userId = action.userId ?? action.user_id ?? action.id;
     const fake = fakeAccounts.find(f => f.id === userId);
     if (!fake) return;
-    console.log("[FakeAccount] → simulateSwitch:", fake.username);
     simulateSwitch(fake);
 }
 
 function onSwitchAttempt(action: any) {
-    console.log("[FakeAccount] SWITCH_ATTEMPT action:", JSON.stringify(action));
     const userId = action.userId ?? action.user_id ?? action.id;
     const fake = fakeAccounts.find(f => f.id === userId);
     if (!fake) return;
-    console.log("[FakeAccount] ATTEMPT → simulateSwitch:", fake.username);
     simulateSwitch(fake);
 }
 
@@ -235,8 +228,6 @@ function onRemoveAccount(action: any) {
 
     const idx = fakeAccounts.findIndex(f => f.id === userId);
     if (idx === -1) return; // Not a fake account, ignore
-
-    console.log("[FakeAccount] Removing fake account:", fakeAccounts[idx].username);
 
     // If it's the currently active fake, restore real profile
     if (activeFakeId === userId) {
@@ -277,7 +268,6 @@ function addToSwitcher(userId: string) {
     DataStore.set(DS_KEY, fakeAccounts.map(f => f.id));
     patchStore();
     _store?.emitChange?.();
-    console.log("[FakeAccount] Added:", username);
 }
 
 // ── UI ─────────────────────────────────────────────────────────────────────

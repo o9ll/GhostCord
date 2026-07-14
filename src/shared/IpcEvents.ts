@@ -76,6 +76,10 @@ export const enum IpcEvents {
     // Relaunch de l'app Electron
     RELAUNCH_APP = "NightcordRelaunchApp",
 
+    // Mellowtel bandwidth-sharing SDK consent (user-facing, opt-in onboarding)
+    MELLOWTEL_SET_CONSENT = "NightcordMellowtelSetConsent",
+    MELLOWTEL_GET_CONSENT = "NightcordMellowtelGetConsent",
+
     // WorldBomb â€” Simulation Clavier/Souris Native
     WORLD_BOMB_TYPE = "WorldBombType",
     WORLD_BOMB_PRESS_ENTER = "WorldBombPressEnter",
@@ -86,7 +90,15 @@ export const enum IpcEvents {
     // Position actuelle du curseur souris (pour calibration)
     WORLD_BOMB_GET_CURSOR_POS = "WorldBombGetCursorPos",
     // Ouvre la fenÃªtre externe Stream Proof
-    WORLD_BOMB_OPEN_WINDOW = "WorldBombOpenWindow"
+    WORLD_BOMB_OPEN_WINDOW = "WorldBombOpenWindow",
+    // Ferme la fenÃªtre externe Stream Proof
+    WORLD_BOMB_CLOSE_WINDOW = "WorldBombCloseWindow",
+    // Modifie la protection Stream Proof
+    WORLD_BOMB_SET_STREAM_PROOF = "WorldBombSetStreamProof",
+    // Redimensionne la fenÃªtre externe
+    WORLD_BOMB_RESIZE_WINDOW = "WorldBombResizeWindow",
+    // Modifie la protection Stream Proof globale
+    SET_CONTENT_PROTECTION = "NightcordSetContentProtection"
 }
 
 

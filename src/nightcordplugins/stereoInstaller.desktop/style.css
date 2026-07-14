@@ -81,10 +81,11 @@
 .vc-stereo-installer-info {
     display: grid;
     gap: 8px;
-    padding: 12px;
-    border: 1px solid var(--background-modifier-accent);
-    border-radius: 8px;
-    background: var(--background-secondary);
+    padding: 16px;
+    border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.1));
+    border-radius: 12px;
+    background: var(--background-secondary-alt, rgba(0, 0, 0, 0.2));
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
 .vc-stereo-installer-install-status {
@@ -123,14 +124,20 @@
 
 .vc-stereo-installer-info-line {
     display: grid;
-    grid-template-columns: minmax(90px, 0.22fr) minmax(0, 1fr);
-    gap: 10px;
-    align-items: start;
+    grid-template-columns: minmax(140px, 0.3fr) minmax(0, 1fr);
+    gap: 12px;
+    align-items: center;
+    padding: 8px 12px;
+    background: var(--background-primary, rgba(0, 0, 0, 0.2));
+    border-radius: 6px;
 }
 
 .vc-stereo-installer-info-line span {
-    color: var(--header-secondary);
-    font-weight: 600;
+    color: #c084fc !important;
+    font-weight: 700;
+    text-transform: uppercase;
+    font-size: 11px;
+    letter-spacing: 0.5px;
 }
 
 .vc-stereo-installer-info-line code {
@@ -150,6 +157,9 @@
 }
 
 .vc-stereo-installer-log-panel {
+    display: flex;
+    flex-direction: column;
+    height: 380px;
     overflow: hidden;
     border: 1px solid var(--background-modifier-accent);
     border-radius: 8px;
@@ -173,7 +183,8 @@
 }
 
 .vc-stereo-installer-log {
-    max-height: 320px;
+    flex: 1;
+    height: 100%;
     background: var(--background-tertiary);
     font-family: var(--font-code);
     font-size: 12px;

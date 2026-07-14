@@ -56,7 +56,10 @@ const nodeCommonOpts = {
     platform: "node",
     target: ["esnext"],
     // @ts-expect-error this is never undefined
-    external: ["electron", "original-fs", "~pluginNatives", ...commonOpts.external]
+    // "mellowtel" is external: it's a runtime-only, opt-in dependency (see
+    // src/main/mellowtel.ts). The package is installed as a devDependency but
+    // must remain external so Electron can load it from its own node_modules.
+    external: ["electron", "original-fs", "~pluginNatives", "mellowtel", ...commonOpts.external]
 };
 
 const sourceMapFooter = s => watch ? "" : `//# sourceMappingURL=vencord://${s}.js.map`;

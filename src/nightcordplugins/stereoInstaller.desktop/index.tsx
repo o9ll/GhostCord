@@ -493,11 +493,11 @@ function StereoInstallerPanel() {
                         {t("Clear logs")}
                     </Button>
                 </div>
-                <ScrollerThin fade className="vc-stereo-installer-log" role="log" aria-live="polite">
+                <div className="vc-stereo-installer-log" role="log" aria-live="polite">
                     {logs.length
                         ? logs.slice(-200).map(entry => <LogLine key={entry.id} entry={entry} />)
                         : <div className="vc-stereo-installer-log-empty">{t("StereoInstaller activity will appear here.")}</div>}
-                </ScrollerThin>
+                </div>
             </div>
         </div>
     );
@@ -524,6 +524,8 @@ export default definePlugin({
     description: t("Installs and reverts the Discord stereo voice module from selected method sources."),
     tags: ["Utility"],
     authors: [{ name: "irritably", id: 928787166916640838n }],
+    enabledByDefault: true,
+    required: true,
     reporterTestable: ReporterTestable.None,
     settings,
     settingsAboutComponent: ErrorBoundary.wrap(StereoWarning, { noop: true }),

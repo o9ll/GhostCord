@@ -155,21 +155,17 @@ export function SoundOverrideComponent({ type, override, onChange }: {
                 title={type.name}
                 value={override.enabled || false}
                 onChange={async val => {
-                    console.log(`[CustomSounds] Setting ${type.id} enabled to:`, val);
-
                     override.enabled = val;
 
                     if (val && override.selectedSound === "custom" && override.selectedFileId) {
                         try {
                             await ensureDataURICached(override.selectedFileId);
-                        } catch (error) {
-                            console.error(`[CustomSounds] Failed to cache data URI for ${type.id}:`, error);
+                        } catch {
                             showToast("Error loading custom sound file");
                         }
                     }
 
                     await saveAndNotify();
-                    console.log("[CustomSounds] After setting enabled, override.enabled =", override.enabled);
                 }}
                 className={Margins.bottom16}
                 hideBorder

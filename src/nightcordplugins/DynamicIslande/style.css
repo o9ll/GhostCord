@@ -119,6 +119,52 @@
     --interactive-hover: #351225;
 }
 
+/* ── Frosted Glass theme ── */
+/* Uses backdrop-filter to blur whatever is behind the island and overlays  */
+/* a very light translucent white, giving a macOS-style acrylic look.       */
+.vc-illegalcord-dynamic-island-color-blur {
+    /* Light semi-transparent white — sees through but is clearly distinct */
+    background: rgba(255, 255, 255, 0.13) !important;
+    --background-floating: rgba(255, 255, 255, 0.13);
+    --background-mod-subtle: rgba(255, 255, 255, 0.08);
+    --background-mod-strong: rgba(255, 255, 255, 0.18);
+    --background-modifier-hover: rgba(255, 255, 255, 0.22);
+    --border-subtle: rgba(255, 255, 255, 0.25);
+    --border-strong: rgba(255, 255, 255, 0.45);
+    --text-default: #f2f3f5;
+    --header-primary: #ffffff;
+    --text-muted: rgba(255, 255, 255, 0.6);
+    --interactive-normal: rgba(255, 255, 255, 0.75);
+    --interactive-hover: #ffffff;
+
+    backdrop-filter: blur(3px) saturate(180%) brightness(1.05);
+    -webkit-backdrop-filter: blur(3px) saturate(180%) brightness(1.05);
+    border-color: rgba(255, 255, 255, 0.2) !important;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+/* Allow backdrop-filter to sample pixels behind the island */
+.vc-illegalcord-dynamic-island-color-blur.vc-illegalcord-dynamic-island-root {
+    overflow: visible;
+    /* Re-clip with border-radius while keeping backdrop-filter working */
+    clip-path: inset(0 round 24px);
+    transition: width 560ms cubic-bezier(.16, 1, .3, 1),
+                border-radius 480ms cubic-bezier(.16, 1, .3, 1),
+                box-shadow 400ms ease,
+                transform 400ms cubic-bezier(.16, 1, .3, 1),
+                background-color 300ms ease,
+                clip-path 480ms cubic-bezier(.16, 1, .3, 1);
+}
+
+.vc-illegalcord-dynamic-island-color-blur.vc-illegalcord-dynamic-island-root-expanded {
+    clip-path: inset(0 round 20px);
+}
+
+.vc-illegalcord-dynamic-island-color-blur.vc-illegalcord-dynamic-island-root:hover {
+    background: rgba(255, 255, 255, 0.18) !important;
+    box-shadow: var(--shadow-high), 0 0 0 1px rgba(255, 255, 255, 0.35);
+}
+
 .vc-illegalcord-dynamic-island-root * {
     app-region: no-drag;
     -webkit-app-region: no-drag;

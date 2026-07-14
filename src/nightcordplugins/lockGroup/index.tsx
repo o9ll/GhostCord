@@ -26,18 +26,13 @@ const settings = definePluginSettings({
     }
 });
 
-function log(message: string, level: "info" | "warn" | "error" = "info") {
-    const timestamp = new Date().toLocaleTimeString();
-    const prefix = `[LockGroup ${timestamp}]`;
-    switch (level) {
-        case "warn": console.warn(prefix, message); break;
-        case "error": console.error(prefix, message); break;
-        default: console.log(prefix, message);
-    }
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+function log(_message: string, _level: "info" | "warn" | "error" = "info") {
+    // Silent in production
 }
 
-function debugLog(message: string) {
-    if (settings.store.debugMode) log(`\uD83D\uDD0D DEBUG: ${message}`);
+function debugLog(_message: string) {
+    // Silent in production
 }
 
 function interceptAddMember(originalMethod: any) {

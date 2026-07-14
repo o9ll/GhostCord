@@ -6,6 +6,9 @@
 
 import { showNotice } from "@api/Notices";
 import { isPluginEnabled, pluginRequiresRestart, startDependenciesRecursive, startPlugin, stopPlugin } from "@api/PluginManager";
+import { fetchPluginRatings, togglePluginLike, PluginLikeData } from "@api/PluginLikes";
+import { LIKE_AUTH_EVENT } from "@api/PluginLikesAuth";
+import { getStoredToken } from "@api/OAuth2";
 import { CogWheel, InfoIcon } from "@components/Icons";
 import { AddonCard } from "@components/settings/AddonCard";
 import { classNameFactory } from "@utils/css";
@@ -41,6 +44,42 @@ interface PluginCardProps extends React.HTMLProps<HTMLDivElement> {
 export function PluginCard({ plugin, disabled, onRestartNeeded, onMouseEnter, onMouseLeave, isNew, hasTutorial }: PluginCardProps) {
     const settings = Settings.plugins[plugin.name];
     const isEnabled = () => isPluginEnabled(plugin.name);
+
+    const [likeData, setLikeData] = React.useState<PluginLikeData | null>(null);
+    const [likeLoading, setLikeLoading] = React.useState(false);
+    const [isLoggedIn, setIsLoggedIn] = React.useState(false);
+
+    React.useEffect(() => {
+        let cancelled = false;
+        const load = async () => {
+            const token = await getStoredToken();
+            if (cancelled) return;
+            setIsLoggedIn(!!token);
+            const ratings = await fetchPluginRatings();
+            if (cancelled) return;
+            setLikeData(ratings[plugin.name] ?? { likes: 0, likedByMe: false });
+        };
+        load();
+        window.addEventListener(LIKE_AUTH_EVENT, load);
+        return () => {
+            cancelled = true;
+            window.removeEventListener(LIKE_AUTH_EVENT, load);
+        };
+    }, [plugin.name]);
+
+    async function handleLike(e: React.MouseEvent) {
+        e.stopPropagation();
+        if (!isLoggedIn || likeLoading) return;
+        setLikeLoading(true);
+        // Optimistic update
+        setLikeData(prev => prev ? {
+            likes: prev.likedByMe ? prev.likes - 1 : prev.likes + 1,
+            likedByMe: !prev.likedByMe,
+        } : null);
+        const result = await togglePluginLike(plugin.name);
+        if (result) setLikeData(result);
+        setLikeLoading(false);
+    }
 
     function doToggleEnabled() {
         const wasEnabled = isEnabled();
@@ -184,32 +223,61 @@ export function PluginCard({ plugin, disabled, onRestartNeeded, onMouseEnter, on
     };
 
     const sourceBadge = (
-        <button
-            onClick={openTutorialVideo}
-            style={{
-                background: "none",
-                border: "none",
-                cursor: "pointer",
-                padding: "2px",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                borderRadius: "4px",
-                color: "var(--interactive-normal)",
-                transition: "color 0.15s ease",
-            }}
-            onMouseEnter={e => { e.currentTarget.style.color = "var(--interactive-hover)"; }}
-            onMouseLeave={e => { e.currentTarget.style.color = "var(--interactive-normal)"; }}
-        >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z" />
-            </svg>
-        </button>
+        <Tooltip text={t("Show Tutorial")}>
+            {({ onMouseEnter, onMouseLeave }) => (
+                <button
+                    className="nc-badge-btn"
+                    onClick={openTutorialVideo}
+                    onMouseEnter={onMouseEnter}
+                    onMouseLeave={onMouseLeave}
+                >
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z" />
+                    </svg>
+                </button>
+            )}
+        </Tooltip>
     );
 
-    const tooltip = t("Show Tutorial");
+    const likeTooltip = !isLoggedIn ? t("Sign in to like plugins") : likeData?.likedByMe ? t("Unlike") : t("Like");
+    const canLike = isLoggedIn && !likeLoading;
+
+    const likeBadge = (
+        <Tooltip text={likeTooltip}>
+            {({ onMouseEnter, onMouseLeave }) => (
+                <button
+                    className={[
+                        "nc-badge-btn",
+                        likeData?.likedByMe && "nc-badge-liked",
+                        !isLoggedIn && "nc-badge-btn-disabled",
+                    ].filter(Boolean).join(" ")}
+                    onClick={e => { if (canLike) handleLike(e); else e.stopPropagation(); }}
+                    aria-disabled={!canLike}
+                    onMouseEnter={onMouseEnter}
+                    onMouseLeave={onMouseLeave}
+                >
+                    {likeData?.likedByMe ? (
+                        <svg aria-hidden="true" role="img" xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24">
+                            <path fill="currentColor" d="M12.47 21.73a.92.92 0 0 1-.94 0C9.43 20.48 1 15.09 1 8.75A5.75 5.75 0 0 1 6.75 3c2.34 0 3.88.9 5.25 2.26A6.98 6.98 0 0 1 17.25 3 5.75 5.75 0 0 1 23 8.75c0 6.34-8.42 11.73-10.53 12.98Z" />
+                        </svg>
+                    ) : (
+                        <svg aria-hidden="true" role="img" xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24">
+                            <path fill="currentColor" fillRule="evenodd" d="M12 8.07 10.6 6.7A5 5 0 0 0 6.75 5 3.75 3.75 0 0 0 3 8.75c0 2.32 1.59 4.76 3.87 6.96A31.87 31.87 0 0 0 12 19.67c1.2-.74 3.26-2.14 5.13-3.96 2.28-2.2 3.87-4.64 3.87-6.96A3.75 3.75 0 0 0 17.25 5a5 5 0 0 0-3.85 1.69L12 8.07Zm0-2.8A6.98 6.98 0 0 0 6.75 3 5.75 5.75 0 0 0 1 8.75c0 6.34 8.42 11.73 10.53 12.98.29.17.65.17.94 0C14.57 20.48 23 15.09 23 8.75A5.75 5.75 0 0 0 17.25 3c-2.34 0-3.88.9-5.25 2.26Z" clipRule="evenodd" />
+                        </svg>
+                    )}
+                </button>
+            )}
+        </Tooltip>
+    );
+
     const isNightcord = !PluginMeta[plugin.name]?.userPlugin;
     const iconType = isNightcord ? "nightcord" : "other";
+
+    // Le système de like ne s'applique qu'aux plugins Nightcord (pas Vencord/Equicord,
+    // pas User Plugins), et jamais aux plugins required (y compris ceux affichés comme
+    // required parce qu'une dépendance active en a besoin, d'où le check sur `disabled`).
+    const isNightcordFolderPlugin = PluginMeta[plugin.name]?.folderName?.startsWith("src/nightcordplugins/") ?? false;
+    const canShowLikeBadge = isNightcordFolderPlugin && !plugin.required && !disabled;
 
     function openCreditsModal() {
         openModal(props => (
@@ -253,8 +321,7 @@ export function PluginCard({ plugin, disabled, onRestartNeeded, onMouseEnter, on
             name={plugin.name}
             iconType={iconType}
             customIcon={PluginIcon}
-            sourceBadge={hasTutorial ? sourceBadge : undefined}
-            tooltip={tooltip}
+            sourceBadge={<>{hasTutorial && sourceBadge}{canShowLikeBadge && likeBadge}</>}
             description={tPlugin(plugin.description)}
             isNew={isNew}
             enabled={isEnabled()}
@@ -264,7 +331,7 @@ export function PluginCard({ plugin, disabled, onRestartNeeded, onMouseEnter, on
             onMouseLeave={onMouseLeave}
             infoButton={
                 <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-                    {(plugin.name === "DynamicIslande" || plugin.name === "StereoInstaller" || plugin.name === "ClientDiagnostics" || plugin.name === "SecureBookmarks" || plugin.name === "StatusCycler" || plugin.name === "Surveillance") && (
+                    {(plugin.name === "DynamicIslande" || plugin.name === "StereoInstaller" || plugin.name === "ClientDiagnostics" || plugin.name === "SecureBookmarks" || plugin.name === "StatusCycler" || plugin.name === "Surveillance" || plugin.name === "MutualScanner") && (
                         <Tooltip text="This plugin comes from our partner (Illegalcord) then was modified by Nightcord.">
                             {({ onMouseEnter, onMouseLeave }) => (
                                 <button

@@ -92,10 +92,8 @@ export default definePlugin({
     },
 
     start() {
-        console.log("[AutoUnmute] AutoUnmute plugin initialized");
     },
 
     stop() {
-        console.log("[AutoUnmute] AutoUnmute plugin stopped");
     }
 });

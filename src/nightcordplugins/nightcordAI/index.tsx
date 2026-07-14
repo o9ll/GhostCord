@@ -21,8 +21,10 @@ import { findByPropsLazy } from "@webpack";
 import { ChannelStore, FluxDispatcher, IconUtils, Menu,React, ReactDOM, RelationshipStore, RestAPI, useEffect, useRef, UserStore, useState } from "@webpack/common";
 import { t } from "@api/i18n";
 
-import { getGroqKey, groqChat,setGroqKey } from "./groqManager";
+import { getGroqKey, groqChat, setGroqKey, registerSettingsFallback } from "./groqManager";
 import { t as tUI } from "@api/i18n";
+
+registerSettingsFallback(() => settings.store.apiKey ?? "");
 
 
 // ── Settings ───────────────────────────────────────────────────────────────────
@@ -798,7 +800,6 @@ export default definePlugin({
             getGroqKey().then(stored => {
                 if (!stored) {
                     setGroqKey(keyFromSettings);
-                    console.log("[NightcordAI] API key migrated to shared DataStore");
                 }
             });
         }

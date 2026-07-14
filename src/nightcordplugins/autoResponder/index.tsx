@@ -108,7 +108,6 @@ async function handleMessage(message: any) {
     // Vérification de la blacklist utilisateurs
     const blacklistedUsers = settings.store.blacklistedUsers?.split(",").map((id: string) => id.trim()) || [];
     if (blacklistedUsers.includes(message.author.id)) {
-        console.log(`[AutoResponder] Skipping blacklisted user: ${message.author.username} (${message.author.id})`);
         return;
     }
 
@@ -355,7 +354,6 @@ export default definePlugin({
     },
 
     start() {
-        console.log("[AutoResponder] Plugin starting...");
     },
 
     stop() {

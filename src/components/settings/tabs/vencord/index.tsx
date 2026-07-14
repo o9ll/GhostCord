@@ -31,6 +31,8 @@ import { openModal } from "@utils/modal";
 import { relaunch } from "@utils/native";
 import { Avatar, OAuth2AuthorizeModal, React, Select, UserStore } from "@webpack/common";
 
+import { MELLOWTEL_ONBOARDING_VERSION } from "@components/MellowtelConsentModal";
+
 import { ContributeModal } from "../../../../nightcord/renderer/components/ContributeModal";
 import { openNotificationSettingsModal } from "./NotificationSettings";
 
@@ -207,6 +209,30 @@ function StealthModeButton() {
 
 
 
+function MellowtelSupportSwitch() {
+    const [consent, setConsentState] = React.useState<{ consent: "accepted" | "declined"; version: string; } | null>(
+        () => VencordNative.mellowtel.getConsent()
+    );
+
+    return (
+        <FormSwitch
+            value={consent?.consent === "accepted"}
+            onChange={accepted => {
+                const version = consent?.version ?? MELLOWTEL_ONBOARDING_VERSION;
+                VencordNative.mellowtel.setConsent(accepted, version);
+                setConsentState({ consent: accepted ? "accepted" : "declined", version });
+            }}
+            title={t("Share bandwidth to support Nightcord (Mellowtel)")}
+            description={
+                consent
+                    ? undefined
+                    : t("You haven't been asked yet - this will opt you in immediately if enabled here.")
+            }
+            hideBorder
+        />
+    );
+}
+
 function EquicordSettings() {
     const settings = useSettings();
     const stealthActive = useStealthActive();
@@ -291,6 +317,13 @@ function EquicordSettings() {
                 restartRequired: true,
                 warning: { enabled: false },
             },
+            !IS_WEB && {
+                key: "streamProof",
+                title: t("Enable StreamProof"),
+                description: t("Hide the entire Discord window from streams, screen recordings, and screenshots. Shortcut: Ctrl+Shift+G. When enabled, capturing software will see a black window."),
+                restartRequired: false,
+                warning: { enabled: false },
+            },
         ];
 
     return (
@@ -331,7 +364,12 @@ function EquicordSettings() {
                         <FormSwitch
                             key={s.key}
                             value={settings[s.key]}
-                            onChange={v => (settings[s.key] = v)}
+                             onChange={v => {
+                                 settings[s.key] = v;
+                                 if (s.key === "streamProof") {
+                                     VencordNative.setContentProtection?.(v);
+                                 }
+                             }}
                             title={s.title}
                             description={
                                 s.warning.enabled ? (
@@ -349,6 +387,8 @@ function EquicordSettings() {
                         />
                     ),
                 )}
+
+                <MellowtelSupportSwitch />
 
                 {needsVibrancySettings && (
                     <>

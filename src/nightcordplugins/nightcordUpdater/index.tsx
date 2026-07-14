@@ -65,7 +65,6 @@ async function checkForUpdates() {
         if (!data?.tag_name) return;
 
         const remoteVersion: string = data.tag_name;
-        console.log(`[NightcordUpdater] local=${localVersion} remote=${remoteVersion}`);
 
         if (isStrictlyNewer(remoteVersion, localVersion)) {
             pendingUpdate = { remoteVersion, localVersion };

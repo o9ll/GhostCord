@@ -152,7 +152,13 @@ export const VesktopNative = {
     worldBomb: {
         sequence: (word: string, lps: number, humanChance: number, targetX: number = -1, targetY: number = -1) =>
             invoke(IpcEvents.WORLD_BOMB_SEQUENCE, word, lps, humanChance, targetX, targetY),
+        openWindow: (lps: number, humanChance: number, safeMode: boolean, theme: string, playMode: string, noSpace: boolean, groqKey: string, words: string[], streamProof: boolean) =>
+            invoke(IpcEvents.WORLD_BOMB_OPEN_WINDOW, lps, humanChance, safeMode, theme, playMode, noSpace, groqKey, words, streamProof),
+        closeWindow: () =>
+            invoke(IpcEvents.WORLD_BOMB_CLOSE_WINDOW),
         getCursorPos: (): Promise<{ x: number; y: number; }> =>
             invoke(IpcEvents.WORLD_BOMB_GET_CURSOR_POS),
     },
+    setContentProtection: (enabled: boolean) =>
+        invoke<boolean>(IpcEvents.SET_CONTENT_PROTECTION, enabled),
 };

@@ -96,7 +96,6 @@ async function correctText(text: string): Promise<string> {
             const corrWords = corrected.trim().split(/\s+/).filter(w => w.length > 0).length;
             // Mode soft ne doit pas ajouter/enlever plus d'un mot sur des phrases courtes
             if (Math.abs(corrWords - srcWords) > Math.max(1, Math.floor(srcWords * 0.15))) {
-                console.log("[AutoCorrect] Soft mode rejected: word count changed too much", { srcWords, corrWords });
                 return text;
             }
         }

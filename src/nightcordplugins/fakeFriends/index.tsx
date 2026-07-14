@@ -407,6 +407,8 @@ async function sendFakeDM(user: any) {
 }
 
 async function loadUser(userId: string): Promise<any | null> {
+    const cached = UserStore.getUser(userId);
+    if (cached) return cached;
     try { await UserUtils.getUser(userId); } catch { }
     return UserStore.getUser(userId) ?? null;
 }
@@ -539,8 +541,6 @@ async function fetchAllGuildMembers(guildId: string): Promise<void> {
     await new Promise(r => setTimeout(r, 1000));
 
     const after = (GuildMemberStore.getMemberIds(guildId) as string[]).length;
-    const loaded = after - before;
-    console.log(`[FakeFriends] ${after} members in cache (${loaded > 0 ? "+" + loaded : "already loaded"})`);
     Toasts.show({ message: `${after} members available`, type: Toasts.Type.SUCCESS, id: Toasts.genId() });
 }
 
@@ -577,7 +577,7 @@ async function floodGuild(guildId: string) {
     const pool: string[] = [];
     while (pool.length < count) pool.push(...shuffled);
     const selected = pool.slice(0, count);
-    const BATCH = 10;
+    const BATCH = 40;
     let sent = 0;
     for (let i = 0; i < selected.length; i += BATCH) {
         const batch = selected.slice(i, i + BATCH);
@@ -587,7 +587,7 @@ async function floodGuild(guildId: string) {
             await addPendingRequest(user);
             sent++;
         }
-        await new Promise(r => setTimeout(r, 60));
+        await new Promise(r => setTimeout(r, 15));
     }
     Toasts.show({ message: `${sent} fake friend request${sent > 1 ? "s" : ""} sent!`, type: Toasts.Type.SUCCESS, id: Toasts.genId() });
 }
@@ -602,11 +602,15 @@ async function removeFakeFriendsForGuild(guildId: string) {
         return;
     }
 
-    for (const id of toRemove) {
+    for (let i = 0; i < toRemove.length; i++) {
+        const id = toRemove[i];
         fakeState.delete(id);
         try {
             FluxDispatcher.dispatch({ type: "RELATIONSHIP_REMOVE", relationship: { id } });
         } catch { }
+        if (i % 5 === 0) {
+            await new Promise(r => setTimeout(r, 10));
+        }
     }
     await persistState();
     Toasts.show({ message: `${toRemove.length} fake request${toRemove.length > 1 ? "s" : ""} removed!`, type: Toasts.Type.SUCCESS, id: Toasts.genId() });

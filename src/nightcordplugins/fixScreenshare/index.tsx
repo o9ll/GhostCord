@@ -15,17 +15,10 @@ function fixEngine() {
         const engine = MediaEngineStore.getMediaEngine();
         if (engine) {
             if (typeof engine.reconfigure === "function") {
-                console.log("[FixScreenshare] Forcing media engine reconfiguration...");
                 engine.reconfigure();
             }
-            // Some versions use setVideoCapturerSource for initialization
-            if (typeof engine.setVideoCapturerSource === "function") {
-                console.log("[FixScreenshare] Media Engine capturer ready.");
-            }
         }
-    } catch (e) {
-        console.error("[FixScreenshare] Error during engine fix:", e);
-    }
+    } catch { }
 }
 
 const handleVoiceChannelSelect = () => {
@@ -40,9 +33,6 @@ export default definePlugin({
     required: true,
 
     start() {
-        console.log("[FixScreenshare] Mandatory fix starting...");
-
-        // Run immediately and after a short delay to ensure Discord is ready
         fixEngine();
         setTimeout(fixEngine, 5000);
         setTimeout(fixEngine, 15000);

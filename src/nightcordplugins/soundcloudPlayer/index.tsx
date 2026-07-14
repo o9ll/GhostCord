@@ -16,6 +16,7 @@ import { ApplicationAssetUtils, MediaEngineStore, React, ReactDOM, createRoot, S
 import { isPluginEnabled } from "@api/PluginManager";
 import { SafeDynamicIsland } from "@nightcordplugins/DynamicIslande";
 import { t } from "../autoTranslateNightcord";
+import { Switch } from "@components/Switch";
 
 // ─── Native (IPC → main process) ─────────────────────────────────────────────
 
@@ -42,6 +43,8 @@ interface ScTrack {
     artworkUrl: string;
     streamUrl: string;
     durationMs: number;
+    /** true when SoundCloud only allows a 30s preview (label/Go+ restriction) */
+    snipped?: boolean;
 }
 
 // ─── DataStore keys ───────────────────────────────────────────────────────────
@@ -101,20 +104,33 @@ function parseTracks(data: any): ScTrack[] {
     const tracks: ScTrack[] = [];
     for (const item of data.collection) {
         if (item.kind !== "track") continue;
-        let streamUrl = "";
         const transcodings = item.media?.transcodings ?? [];
 
-        // Priorité 1 : progressive (MP3 direct)
-        for (const tc of transcodings) {
+        // Only use transcodings that are fully playable (not preview/blocked).
+        // SoundCloud marks major-label tracks with access: "preview" which only
+        // streams a 30-second snipped clip and whose URL resolves to an error.
+        const playable = transcodings.filter((tc: any) =>
+            tc.url && (!tc.access || tc.access === "playable")
+        );
+
+        // If nothing playable, mark as snipped but still include the track in results
+        // so the user can see it (greyed out) rather than it silently disappearing.
+        const snipped = playable.length === 0;
+        const pool = snipped ? transcodings : playable;
+
+        let streamUrl = "";
+
+        // Priority 1: progressive (direct MP3)
+        for (const tc of pool) {
             if (tc.format?.protocol === "progressive" && tc.url) {
                 streamUrl = tc.url;
                 break;
             }
         }
 
-        // Priorité 2 : hls (m3u8 - mieux supporté par les navigateurs modernes)
+        // Priority 2: HLS (m3u8)
         if (!streamUrl) {
-            for (const tc of transcodings) {
+            for (const tc of pool) {
                 if (tc.format?.protocol === "hls" && tc.url) {
                     streamUrl = tc.url;
                     break;
@@ -135,21 +151,30 @@ function parseTracks(data: any): ScTrack[] {
             artworkUrl,
             streamUrl,
             durationMs: item.duration ?? 0,
+            snipped,
         });
     }
     return tracks;
 }
 
 async function searchTracks(query: string, clientId: string): Promise<ScTrack[]> {
+    // Include both playable and preview so users can see restricted tracks
+    // (they'll be shown as unavailable). access=playable,preview excludes fully
+    // blocked/hidden tracks from the results.
     const json = await Native.searchSoundCloud(query, clientId);
     if (!json) throw new Error("Empty response");
     return parseTracks(JSON.parse(json));
 }
 
-async function getStreamUrl(streamUrl: string, clientId: string): Promise<string> {
+async function getStreamUrl(track: ScTrack, clientId: string): Promise<string> {
+    const { streamUrl, snipped } = track;
     if (!streamUrl) throw new Error("Stream URL not found");
 
-    // Si c'est déjà une URL de stream finale ou HLS directe
+    if (snipped) {
+        throw new Error("Label restricted — not available outside SoundCloud Go+");
+    }
+
+    // Already a resolved CDN URL, no need to call the resolve endpoint
     if (streamUrl.includes("cf-hls-media") || streamUrl.includes("cf-media")) {
         return streamUrl;
     }
@@ -169,20 +194,29 @@ async function refreshTrackData(track: ScTrack, clientId: string): Promise<ScTra
         if (!json) return track;
         const data = JSON.parse(json);
 
-        let streamUrl = "";
         const transcodings = data.media?.transcodings ?? [];
 
-        // Priorité 1 : progressive (MP3 direct) - le plus stable
-        for (const tc of transcodings) {
+        // Apply the same access filter as parseTracks: only use playable streams.
+        // Major-label tracks return access: "preview" which can't be resolved.
+        const playable = transcodings.filter((tc: any) =>
+            tc.url && (!tc.access || tc.access === "playable")
+        );
+        const snipped = playable.length === 0;
+        const pool = snipped ? transcodings : playable;
+
+        let streamUrl = "";
+
+        // Priority 1: progressive (direct MP3) - most stable
+        for (const tc of pool) {
             if (tc.format?.protocol === "progressive" && tc.url) {
                 streamUrl = tc.url;
                 break;
             }
         }
 
-        // Priorité 2 : hls (fallback)
+        // Priority 2: HLS (fallback)
         if (!streamUrl) {
-            for (const tc of transcodings) {
+            for (const tc of pool) {
                 if (tc.format?.protocol === "hls" && tc.url) {
                     streamUrl = tc.url;
                     break;
@@ -191,12 +225,9 @@ async function refreshTrackData(track: ScTrack, clientId: string): Promise<ScTra
         }
 
         if (streamUrl) {
-            console.log(`[SoundCord] Track ${track.id} refreshed successfully.`);
-            return { ...track, streamUrl };
+            return { ...track, streamUrl, snipped };
         }
-    } catch (e) {
-        console.error(`[SoundCord] Failed to refresh track ${track.id}:`, e);
-    }
+    } catch { }
     return track;
 }
 
@@ -312,12 +343,9 @@ async function getDiscordRealOutputDeviceId(): Promise<string> {
         );
 
         if (match) {
-            console.log(`[SoundCord] Mapped Discord output device "${selected.name}" to WebAudio deviceId "${match.deviceId}"`);
             return match.deviceId;
         }
-    } catch (err) {
-        console.error("[SoundCord] Error mapping Discord output device:", err);
-    }
+    } catch { }
     return "";
 }
 
@@ -337,7 +365,7 @@ async function playerPlayTrack(track: ScTrack, fromFavIdx = -1) {
         const freshTrack = await refreshTrackData(track, s.clientId);
         s.playing = freshTrack;
 
-        const mp3Url = await getStreamUrl(freshTrack.streamUrl, s.clientId);
+        const mp3Url = await getStreamUrl(freshTrack, s.clientId);
         const audio = new Audio();
 
         // Nettoyage de l'ancienne instance
@@ -489,6 +517,7 @@ function SoundCloudModal({ onClose }: { onClose: () => void; }) {
     const [selectedOutput, setSelectedOutput] = useState<string>("default");
     const p = usePlayerState();
     const progressRef = useRef<HTMLDivElement>(null);
+    const enableIsland = settings.use(["enableDynamicIsland"]).enableDynamicIsland ?? false;
 
     useEffect(() => { initPlayer(); }, []);
 
@@ -594,6 +623,14 @@ function SoundCloudModal({ onClose }: { onClose: () => void; }) {
                     SoundCord Player
                 </span>
                 <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                    {/* Toggle Dynamic Island */}
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginRight: 8 }}>
+                        <span style={{ fontSize: "11px", fontWeight: 600, textTransform: "uppercase", color: "var(--text-muted)" }}>Dynamic Islande</span>
+                        <Switch
+                            checked={enableIsland}
+                            onChange={(val: boolean) => settings.store.enableDynamicIsland = val}
+                        />
+                    </div>
                     {/* Bouton settings */}
                     <button
                         className="sc-close-btn"
@@ -666,8 +703,8 @@ function SoundCloudModal({ onClose }: { onClose: () => void; }) {
                     </div>
                 ) : trackList.map((track, idx) => (
                     <div key={track.id}
-                        className={`sc-track-row${p.playing?.id === track.id ? " sc-track-playing" : ""}`}
-                        onClick={() => tab === "favs" ? playerPlayFavAt(idx) : playerPlayTrack(track)}>
+                        className={`sc-track-row${p.playing?.id === track.id ? " sc-track-playing" : ""}${track.snipped ? " sc-track-snipped" : ""}`}
+                        onClick={() => { if (!track.snipped) tab === "favs" ? playerPlayFavAt(idx) : playerPlayTrack(track); }}>
                         <img className="sc-artwork" src={track.artworkUrl || ""} alt=""
                             onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
                         <div className="sc-track-info">
@@ -675,7 +712,9 @@ function SoundCloudModal({ onClose }: { onClose: () => void; }) {
                             <div className="sc-track-artist">{track.artist} · {fmtDuration(track.durationMs)}</div>
                         </div>
                         <button className="sc-play-btn"
-                            onClick={e => { e.stopPropagation(); tab === "favs" ? playerPlayFavAt(idx) : playerPlayTrack(track); }}>
+                            disabled={!!track.snipped}
+                            title={track.snipped ? "Label restricted" : "Play"}
+                            onClick={e => { e.stopPropagation(); if (!track.snipped) tab === "favs" ? playerPlayFavAt(idx) : playerPlayTrack(track); }}>
                             <IconPlay />
                         </button>
                         <button className={`sc-fav-btn${isFav(track) ? " sc-fav-active" : ""}`}
@@ -940,7 +979,7 @@ export const settings = definePluginSettings({
     enableDynamicIsland: {
         type: OptionType.BOOLEAN,
         description: "Enable Dynamic Island for SoundCord",
-        default: true,
+        default: false,
     },
     showSoundCordControls: {
         type: OptionType.BOOLEAN,

@@ -74,7 +74,7 @@ export const TabBar = waitForComponent("TabBar", m =>
     filters.componentByCode("tablist")(m)
 );
 // TODO: remake this component
-export const Clickable = waitForComponent<t.Clickable>("Clickable", filters.componentByCode("this.context?this.renderNonInteractive():"));
+export const Clickable = waitForComponent<t.Clickable>("Clickable", filters.componentByCode("renderNonInteractive"));
 export const Avatar = waitForComponent<t.Avatar>("Avatar", filters.componentByCode(".size-1.375*"));
 
 export let ColorPicker: t.ColorPicker = () => null;

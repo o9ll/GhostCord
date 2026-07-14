@@ -134,6 +134,5 @@ export default definePlugin({
     },
 
     start() {
-        console.log("[ShowID] Plugin started using ProfileSections native patches.");
     }
 });

@@ -16,9 +16,70 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
+// Global console filter to clear normal, expected but noisy startup logs & warnings
+try {
+    const skipLogs = [
+        "Sentry successfully disabled",
+        "had no effect (Module id is",
+        "errored (Module id is",
+        "found no module",
+        "Error while filtering or firing callback",
+        "Failed to render header bar button",
+        "Failed to render channel toolbar button",
+        "Starting plugin",
+        "Starting plugins",
+        "Undoing patch group",
+        "Disabling Sentry by erroring its WebpackInstance",
+        "Default overlay keybind is unsupported",
+        "Spellchecker",
+        "NowPlayingViewStore",
+        "RPCServer",
+        "libdiscore",
+        "L.createContext is not a function",
+        "webpack.find"
+    ];
+
+    const shouldSkip = (args: any[]) => {
+        try {
+            const str = args.map(a => {
+                if (a == null) return "";
+                if (a instanceof Error) return a.message + "\n" + a.stack;
+                if (typeof a === "object") {
+                    try { return JSON.stringify(a); } catch { return String(a); }
+                }
+                return String(a);
+            }).join(" ");
+            
+            return skipLogs.some(pat => str.includes(pat));
+        } catch {
+            return false;
+        }
+    };
+
+    const wrap = (level: "log" | "error" | "warn" | "info" | "debug") => {
+        const orig = console[level];
+        console[level] = function (...args: any[]) {
+            if (shouldSkip(args)) return;
+            orig.apply(console, args);
+        };
+    };
+
+    wrap("log");
+    wrap("error");
+    wrap("warn");
+    wrap("info");
+    wrap("debug");
+
+    window.addEventListener("error", (e) => {
+        if (e.error?.message?.includes("Sentry successfully disabled") || e.message?.includes("Sentry successfully disabled")) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+    }, true);
+} catch { }
+
 // DO NOT REMOVE UNLESS YOU WISH TO FACE THE WRATH OF THE CIRCULAR DEPENDENCY DEMON!!!!!!!
 import "~plugins";
-console.log("%c[Nightcord]", "color: #5865f2; font-weight: bold;", "Injection successful! Starting services...");
 
 export * as Api from "./api";
 export * as Plugins from "./api/PluginManager";
@@ -31,17 +92,17 @@ export { PlainSettings, Settings };
 
 import { coreStyleRootNode, initStyles } from "@api/Styles";
 import { openSettingsTabModal, UpdaterTab } from "@components/settings";
+import { openMellowtelOnboardingModal, shouldShowMellowtelOnboarding } from "@components/MellowtelConsentModal";
 import { debounce } from "@shared/debounce";
 import { IS_WINDOWS } from "@utils/constants";
 import { createAndAppendStyle } from "@utils/css";
 import { StartAt } from "@utils/types";
-import { SettingsRouter, Alerts } from "@webpack/common";
+import { SettingsRouter } from "@webpack/common";
 
 import { get as dsGet } from "./api/DataStore";
 import { popNotice, showNotice } from "./api/Notices";
 import { showNotification } from "./api/Notifications";
 import { initPluginManager, PMLogger, startAllPlugins } from "./api/PluginManager";
-import { t } from "./api/i18n";
 import { PlainSettings, Settings, SettingsStore } from "./api/Settings";
 import { getCloudSettings, putCloudSettings, shouldCloudSync } from "./api/SettingsSync/cloudSync";
 import { localStorage } from "./utils/localStorage";
@@ -340,24 +401,11 @@ async function init() {
     syncSettings();
     initTrayIpc();
 
-    const hasOpened = localStorage.getItem("nightcord_telegram_opened");
-    if (!hasOpened) {
-        localStorage.setItem("nightcord_telegram_opened", "true");
-        setTimeout(() => {
-            Alerts.show({
-                title: t("Welcome to Nightcord!"),
-                body: t("Thank you for installing Nightcord. Would you like to join our official Telegram channel to stay updated?"),
-                confirmText: t("Open link"),
-                cancelText: t("Cancel"),
-                onConfirm: () => {
-                    if (window.nightcord && typeof window.nightcord.openUrl === "function") {
-                        window.nightcord.openUrl("https://t.me/nightcordoff");
-                    } else {
-                        VencordNative.native.openExternal("https://t.me/nightcordoff");
-                    }
-                }
-            });
-        }, 3000);
+    // Mandatory, one-time (per onboarding version) consent screen for the Mellowtel
+    // bandwidth-sharing SDK. It re-appears after major updates by bumping
+    // MELLOWTEL_ONBOARDING_VERSION.
+    if (shouldShowMellowtelOnboarding()) {
+        setTimeout(() => openMellowtelOnboardingModal(), 1500);
     }
 
     if (!IS_WEB && !IS_UPDATER_DISABLED) {

@@ -33,11 +33,8 @@ const Native = VencordNative.pluginHelpers.CursorMacOS as PluginNative<typeof im
 
 async function apply() {
     const { style, size } = settings.store;
-    console.log(`[CursorMacOS] Applying: ${style}/${size}`);
     const result = await Native.applyCursors(style, size);
-    if (!result.ok) {
-        console.error("[CursorMacOS] Failed to apply:", result.error);
-    }
+    if (!result.ok) { /* apply failed silently */ }
 }
 
 const changeListener = () => {
@@ -59,10 +56,7 @@ export default definePlugin({
 
     async stop() {
         SettingsStore.removePrefixChangeListener("plugins.CursorMacOS", changeListener);
-        console.log("[CursorMacOS] Restoring default Windows cursors...");
         const result = await Native.restoreCursors();
-        if (!result.ok) {
-            console.error("[CursorMacOS] Failed to restore:", result.error);
-        }
+        if (!result.ok) { /* restore failed silently */ }
     },
 });

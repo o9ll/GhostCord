@@ -45,7 +45,6 @@ function isStreaming(): boolean {
 
         const userStream = StreamStore?.getActiveStreamForUser?.(currentUser.id);
         if (userStream) {
-            if (settings.store.debugMode) console.log("[NoDMWhileStreaming] [DEBUG] Stream detected via getActiveStreamForUser", userStream);
             return true;
         }
 
@@ -62,8 +61,7 @@ function isStreaming(): boolean {
         }
 
         return false;
-    } catch (e) {
-        console.error("[NoDMWhileStreaming] Error during stream check:", e);
+    } catch {
         return false;
     }
 }
@@ -122,10 +120,6 @@ export default definePlugin({
             const currentUser = UserStore?.getCurrentUser?.();
             if (currentUser && message.author?.id === currentUser.id) return;
 
-            if (settings.store.debugMode) {
-                console.log(`[NoDMWhileStreaming] [ACK] Auto-ack message from ${message.author?.username} in channel ${message.channel_id}`);
-            }
-
             // Mark the channel as read. Must be in a queueMicrotask to prevent Flux dispatch collision synchronously
             // but process it before the browser repaints the next frame (instant clean)!
             queueMicrotask(() => {
@@ -135,15 +129,11 @@ export default definePlugin({
                         context: "APP",
                         channels: [{
                             channelId: channel.id,
-                            messageId: message.id, // Use the new message ID directly to clear it instantly
+                            messageId: message.id,
                             readStateType: 0
                         }]
                     });
-                } catch (e) {
-                    if (settings.store.debugMode) {
-                        console.error("[NoDMWhileStreaming] Error during ack:", e);
-                    }
-                }
+                } catch { }
             });
         }
     },
@@ -161,9 +151,6 @@ export default definePlugin({
 
     filterChannels(ids: string[]) {
         const streaming = isStreaming();
-        if (settings.store.debugMode) {
-            console.log(`[NoDMWhileStreaming] [DEBUG] 🎨 filterChannels called. IDs count: ${ids?.length}, Streaming: ${streaming}`);
-        }
         if (!streaming) return ids;
 
         const filtered = ids.filter((id: string) => {
@@ -173,13 +160,6 @@ export default definePlugin({
             return true;
         });
 
-        if (settings.store.debugMode) {
-            console.log(`[NoDMWhileStreaming] [DEBUG] 🎨 filterChannels filtered. Remaining: ${filtered.length}`);
-        }
-
-        // If streaming and filtered is empty, but we had original DMs,
-        // return [ids[0]] so that privateChannelIds is non-empty.
-        // This keeps the "Direct Messages" header rendering, and our CSS hides this single item!
         if (filtered.length === 0 && ids.length > 0) {
             return [ids[0]];
         }
@@ -188,18 +168,12 @@ export default definePlugin({
     },
 
     start() {
-        if (settings.store.debugMode) console.log("[NoDMWhileStreaming] Plugin started");
-
-        // Patch window.Notification to block desktop notifications while streaming
         if (typeof window !== "undefined" && window.Notification) {
             originalNotification = window.Notification;
             try {
                 // @ts-ignore
                 window.Notification = function (title: string, options: any) {
                     if (isStreaming()) {
-                        if (settings.store.debugMode) {
-                            console.log("[NoDMWhileStreaming] [Notification] Blocked desktop notification:", title);
-                        }
                         return {
                             close() {},
                             onclick: null,
@@ -210,35 +184,25 @@ export default definePlugin({
                     }
                     return new originalNotification(title, options);
                 };
-                // Copy properties to maintain compatibility
                 window.Notification.prototype = originalNotification.prototype;
                 window.Notification.permission = originalNotification.permission;
                 window.Notification.requestPermission = originalNotification.requestPermission;
-            } catch (e) {
-                console.error("[NoDMWhileStreaming] Failed to patch window.Notification:", e);
-            }
+            } catch { }
         }
 
-        // Patch playSound to block message sounds while streaming
         try {
             const soundModule = findByProps("playSound", "createSound");
             if (soundModule) {
                 originalPlaySound = soundModule.playSound;
                 soundModule.playSound = function (soundName: string, ...args: any[]) {
                     if (isStreaming() && soundName === "message") {
-                        if (settings.store.debugMode) {
-                            console.log("[NoDMWhileStreaming] [Sound] Blocked message notification sound");
-                        }
                         return;
                     }
                     return originalPlaySound.call(soundModule, soundName, ...args);
                 };
             }
-        } catch (e) {
-            console.error("[NoDMWhileStreaming] Failed to patch soundModule:", e);
-        }
+        } catch { }
 
-        // Patch Discord's internal notification actions to fully prevent in-app/desktop notification creation
         try {
             const notificationActions = findByProps("showNotification");
             if (notificationActions) {
@@ -251,9 +215,6 @@ export default definePlugin({
                                 const isDM = channel.type === 1;
                                 const isGroup = channel.type === 3 && settings.store.hideGroups;
                                 if (isDM || isGroup) {
-                                    if (settings.store.debugMode) {
-                                        console.log("[NoDMWhileStreaming] [Notification] Blocked native showNotification for channel:", channelId);
-                                    }
                                     return;
                                 }
                             }
@@ -269,9 +230,6 @@ export default definePlugin({
                             const isDM = channel?.type === 1;
                             const isGroup = channel?.type === 3 && settings.store.hideGroups;
                             if (isDM || isGroup) {
-                                if (settings.store.debugMode) {
-                                    console.log("[NoDMWhileStreaming] [Notification] Blocked native makeTextNotification");
-                                }
                                 return;
                             }
                         }
@@ -279,13 +237,10 @@ export default definePlugin({
                     };
                 }
             }
-        } catch (e) {
-            console.error("[NoDMWhileStreaming] Failed to patch native notificationActions:", e);
-        }
+        } catch { }
     },
 
     stop() {
-        if (settings.store.debugMode) console.log("[NoDMWhileStreaming] Plugin stopped");
 
         // Restore window.Notification
         if (originalNotification && typeof window !== "undefined") {

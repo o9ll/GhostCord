@@ -8,16 +8,21 @@ import ErrorBoundary from "@components/ErrorBoundary";
 import { Logger } from "@utils/Logger";
 import { classes } from "@utils/misc";
 import { find, filters, findComponentByCodeLazy, findCssClassesLazy } from "@webpack";
-import { Clickable, Tooltip, useEffect, useState, Popout, useRef } from "@webpack/common";
+import { Clickable, Tooltip, useEffect, useState, Popout, useRef, showToast, Toasts } from "@webpack/common";
 import type { ComponentType, JSX, MouseEventHandler, ReactNode } from "react";
 import { openNightcordModal } from "@nightcordplugins/compactMode/NightcordModal";
+import { Settings } from "@api/Settings";
 
 const logger = new Logger("HeaderBarAPI");
 
 const HeaderBarClasses = new Proxy({}, {
     get: (_, prop: string) => {
-        const mod = find(filters.byProps("clickable", "withHighlight"));
-        return mod ? mod[prop] : prop;
+        try {
+            const mod = find(filters.byProps("clickable", "withHighlight"));
+            return mod ? mod[prop] : prop;
+        } catch {
+            return prop;
+        }
     }
 }) as any;
 const HeaderBarIcon = findComponentByCodeLazy(".HEADER_BAR_BADGE_TOP:", '"aria-haspopup":') as ComponentType<ChannelToolbarButtonProps>;
@@ -74,7 +79,7 @@ export function HeaderBarButton(props: HeaderBarButtonProps & { ref?: React.RefO
     const label = ariaLabel ?? (typeof tooltip === "string" ? tooltip : undefined);
 
     if (!Tooltip || !Clickable || !Icon) {
-        logger.error(`HeaderBarButton missing component for tooltip=${tooltip}: Tooltip=${!!Tooltip}, Clickable=${!!Clickable}, Icon=${!!Icon}`);
+        return null;
     }
 
     return (
@@ -152,16 +157,13 @@ const NON_REACT_SELECTORS = [
 ];
 
 function hideNonReactElements(hide: boolean) {
-    let count = 0;
     for (const sel of NON_REACT_SELECTORS) {
         try {
             document.querySelectorAll(sel).forEach(el => {
                 (el as HTMLElement).style.display = hide ? "none" : "";
-                count++;
             });
         } catch { }
     }
-    console.log("[StealthMode] hideNonReact hide=" + hide + " count=" + count);
 }
 
 export function syncStealthBodyClass() {
@@ -175,7 +177,6 @@ export function toggleStealthMode() {
     hideNonReactElements(_stealthActive);
     _notifyStealthChange();
     try { if (_stealthActive) document.body?.classList.add("nightcord-stealth"); else document.body?.classList.remove("nightcord-stealth"); } catch { }
-    console.log("[StealthMode] toggled →", _stealthActive);
     return _stealthActive;
 }
 
@@ -190,6 +191,21 @@ try {
             e.preventDefault();
             e.stopPropagation();
             toggleStealthMode();
+        }
+        if (e.ctrlKey && e.shiftKey && !e.altKey && !e.metaKey && e.code === "KeyG") {
+            e.preventDefault();
+            e.stopPropagation();
+            const newVal = !Settings.streamProof;
+            Settings.streamProof = newVal;
+            if (typeof window !== "undefined" && (window as any).VencordNative?.setContentProtection) {
+                (window as any).VencordNative.setContentProtection(newVal);
+            }
+            try {
+                showToast(
+                    newVal ? "StreamProof Enabled" : "StreamProof Disabled",
+                    newVal ? Toasts.Type.SUCCESS : Toasts.Type.FAILURE
+                );
+            } catch {}
         }
     }, true);
 } catch { }
@@ -269,7 +285,6 @@ export function toggleCompactMode() {
     persistCompact(_compactActive);
     _notifyCompactChange();
     try { if (_compactActive) document.body?.classList.add("nightcord-compact"); else document.body?.classList.remove("nightcord-compact"); } catch { }
-    console.log("[CompactMode] toggled →", _compactActive);
     return _compactActive;
 }
 
@@ -518,11 +533,15 @@ function HeaderBarButtons() {
         <div className="vc-header-bar-btns" style={{ display: "contents" }}>
             {Array.from(headerBarButtons)
                 .sort(([, a], [, b]) => a.priority - b.priority)
-                .map(([id, { render: Button }]) => (
-                    <ErrorBoundary noop key={id} onError={e => logger.error(`Failed to render header bar button: ${id}`, e.error)}>
-                        <Button />
-                    </ErrorBoundary>
-                ))}
+                .map(([id, entry]) => {
+                    const Button = entry?.render;
+                    if (!Button) return null;
+                    return (
+                        <ErrorBoundary noop key={id}>
+                            <Button />
+                        </ErrorBoundary>
+                    );
+                })}
         </div>
     );
 }
@@ -560,11 +579,15 @@ function ChannelToolbarButtons() {
         <div className="vc-channel-toolbar-btns" style={{ display: "contents" }}>
             {Array.from(channelToolbarButtons)
                 .sort(([, a], [, b]) => a.priority - b.priority)
-                .map(([id, { render: Button }]) => (
-                    <ErrorBoundary noop key={id} onError={e => logger.error(`Failed to render channel toolbar button: ${id}`, e.error)}>
-                        <Button />
-                    </ErrorBoundary>
-                ))}
+                .map(([id, entry]) => {
+                    const Button = entry?.render;
+                    if (!Button) return null;
+                    return (
+                        <ErrorBoundary noop key={id}>
+                            <Button />
+                        </ErrorBoundary>
+                    );
+                })}
         </div>
     );
 }

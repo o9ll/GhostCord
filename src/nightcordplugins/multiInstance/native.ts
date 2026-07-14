@@ -5,12 +5,93 @@
  */
 
 import { app, BrowserWindow, ipcMain,screen, session } from "electron";
-import { existsSync,mkdirSync, writeFileSync } from "fs";
+import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "fs";
 import { join } from "path";
 
 import { registerMediaPermissionsForSession } from "../../nightcord/main/mediaPermissions";
 
 const openWindows = new Map<string, BrowserWindow>();
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Réglages partagés (thème, audio, zoom, etc.) entre toutes les instances
+//
+// Chaque instance tourne dans sa propre session Electron (persist:nightcord-mi-{userId}),
+// donc son localStorage est totalement vide au premier lancement : Discord démarre
+// avec ses réglages par défaut (pas de device audio choisi, thème par défaut, etc.),
+// ce qui donne l'impression d'une fenêtre "vide" tant que l'utilisateur n'a pas tout
+// reconfiguré à la main.
+//
+// On capture donc le localStorage de la fenêtre qui déclenche l'ouverture (le plus
+// souvent la fenêtre principale) et on le sauvegarde sur disque. Ce cache est ensuite
+// injecté dans chaque nouvelle instance via le preload, mais UNIQUEMENT pour les clés
+// qui n'existent pas encore dans le profil ciblé — on ne touche jamais à un réglage
+// déjà personnalisé pour ne rien casser.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const SHARED_SETTINGS_FILE = join(app.getPath("userData"), "nightcord-mi-shared-settings.json");
+
+// Clés qu'on ne veut jamais copier d'une fenêtre à l'autre (identité du compte)
+const SHARED_SETTINGS_BLOCKLIST = new Set(["token"]);
+
+const DUMP_LOCAL_STORAGE_SCRIPT = `
+(function() {
+    try {
+        const out = {};
+        for (let i = 0; i < localStorage.length; i++) {
+            const k = localStorage.key(i);
+            if (!k || k === "token") continue;
+            out[k] = localStorage.getItem(k);
+        }
+        return JSON.stringify(out);
+    } catch (e) {
+        return "{}";
+    }
+})();
+`;
+
+function loadSharedSettings(): Record<string, string> {
+    try {
+        if (!existsSync(SHARED_SETTINGS_FILE)) return {};
+        const raw = readFileSync(SHARED_SETTINGS_FILE, "utf-8");
+        const parsed = JSON.parse(raw);
+        return parsed && typeof parsed === "object" ? parsed : {};
+    } catch {
+        return {};
+    }
+}
+
+function saveSharedSettings(settings: Record<string, string>): void {
+    try {
+        writeFileSync(SHARED_SETTINGS_FILE, JSON.stringify(settings), "utf-8");
+    } catch (e) {
+        console.warn("[NightcordMI] Failed to save shared settings:", e);
+    }
+}
+
+/**
+ * Capture le localStorage de la fenêtre qui a déclenché l'action (event.sender)
+ * et le fusionne avec le cache déjà présent sur disque. Ne lève jamais d'erreur :
+ * en cas de souci on retombe simplement sur le cache existant.
+ */
+async function captureAndMergeSharedSettings(sourceEvent: any): Promise<Record<string, string>> {
+    const existing = loadSharedSettings();
+    try {
+        const sourceWc = sourceEvent?.sender;
+        if (!sourceWc || sourceWc.isDestroyed?.()) return existing;
+        const dump = await sourceWc.executeJavaScript(DUMP_LOCAL_STORAGE_SCRIPT);
+        const captured = JSON.parse(dump || "{}");
+        const filtered: Record<string, string> = {};
+        for (const [key, value] of Object.entries(captured)) {
+            if (SHARED_SETTINGS_BLOCKLIST.has(key)) continue;
+            if (typeof value === "string") filtered[key] = value;
+        }
+        const merged = { ...existing, ...filtered };
+        saveSharedSettings(merged);
+        return merged;
+    } catch {
+        return existing;
+    }
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Intercepte les IPC de contrôle de fenêtre pour une instance multi.
@@ -97,19 +178,35 @@ function registerWindowControlIpc(win: BrowserWindow): () => void {
 // Crée le script de préchargement qui injecte le token
 // ─────────────────────────────────────────────────────────────────────────────
 
-function createTokenPreload(token: string): string {
+function createTokenPreload(token: string, sharedSettings: Record<string, string> = {}): string {
     // Dossier temporaire dans userData
     const dir = join(app.getPath("userData"), "nightcord-mi-preloads");
     mkdirSync(dir, { recursive: true });
 
     const safeToken = JSON.stringify(token); // échappe proprement le token
+    const safeSharedSettings = JSON.stringify(sharedSettings ?? {});
 
     const script = `
 // Nightcord MultiInstance — token preload
 // S'exécute dans le main world AVANT Discord
 (function() {
     const TOKEN = ${safeToken};
+    const SHARED_SETTINGS = ${safeSharedSettings};
     try {
+        // Pré-remplit les réglages visuels/audio partagés (thème, device audio, zoom, ...)
+        // UNIQUEMENT si la clé n'existe pas déjà dans ce profil, pour ne jamais écraser
+        // un réglage déjà personnalisé pour cette instance précise.
+        try {
+            for (const key in SHARED_SETTINGS) {
+                if (key === "token") continue;
+                if (localStorage.getItem(key) === null) {
+                    localStorage.setItem(key, SHARED_SETTINGS[key]);
+                }
+            }
+        } catch (e) {
+            console.warn("[NightcordMI] Shared settings seed error:", e);
+        }
+
         // Définit le token dans localStorage
         Object.defineProperty(window, '__nightcord_token', { value: TOKEN, writable: false });
 
@@ -203,7 +300,8 @@ export async function openInstanceWindow(
 
         registerMediaPermissionsForSession(ses);
 
-        const preloadPath = createTokenPreload(token);
+        const sharedSettings = await captureAndMergeSharedSettings(_);
+        const preloadPath = createTokenPreload(token, sharedSettings);
         ses.setPreloads([preloadPath]);
 
         const win = new BrowserWindow({
@@ -283,6 +381,8 @@ export async function openInstanceWindow(
             openWindows.delete(userId);
             // Nettoie les service workers de la session pour couper définitivement les notifs
             ses.clearStorageData({ storages: ["serviceworkers"] }).catch(() => {});
+            // Supprime le fichier de preload temporaire pour éviter qu'ils s'accumulent sur disque
+            try { unlinkSync(preloadPath); } catch {}
         });
 
         // Flash quand il y a des notifs
@@ -363,7 +463,8 @@ export async function openInstanceWindowGrouped(
 
         registerMediaPermissionsForSession(ses);
 
-        const preloadPath = createTokenPreload(token);
+        const sharedSettings = await captureAndMergeSharedSettings(_);
+        const preloadPath = createTokenPreload(token, sharedSettings);
         ses.setPreloads([preloadPath]);
 
         const win = new BrowserWindow({
@@ -423,6 +524,7 @@ export async function openInstanceWindowGrouped(
             cleanupIpc();
             openGroupedWindows.delete(userId);
             ses.clearStorageData({ storages: ["serviceworkers"] }).catch(() => {});
+            try { unlinkSync(preloadPath); } catch {}
         });
 
         wc.on("page-title-updated", (e, title) => {

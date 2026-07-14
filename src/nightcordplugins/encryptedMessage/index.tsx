@@ -5,370 +5,911 @@
  */
 
 import { ChatBarButton, ChatBarButtonFactory } from "@api/ChatButtons";
-import { addContextMenuPatch, removeContextMenuPatch } from "@api/ContextMenu";
-import definePlugin from "@utils/types";
-import type { Message } from "@vencord/discord-types";
-import { Menu, Parser, React, Toasts, useEffect, useState, MessageStore, SelectedChannelStore } from "@webpack/common";
-import { t } from "../autoTranslateNightcord";
+import { definePluginSettings } from "@api/Settings";
+import definePlugin, { IconComponent, OptionType } from "@utils/types";
+import { findByProps } from "@webpack";
+import { FluxDispatcher, Menu, React, Toasts, MessageStore, openModal, SelectedChannelStore, Button, TextInput, Modal, ModalContent, ModalHeader, ModalFooter, ModalCloseButton, showToast, Switch } from "@webpack/common";
+import { sendMessage } from "@utils/discord";
 
-const MARKER = "\u200B\u200C\u200D";
+const SECURITY_CONSTANTS = {
+    DEFAULT_MIN_PASSWORD_LENGTH: 12,
+    MAX_PASSWORD_LENGTH: 128,
+    LEGACY_PBKDF2_ITERATIONS: 200000,
+    SALT_LENGTH: 32,
+    IV_LENGTH: 12,
+    ITERATION_LENGTH: 4,
+    VERSION_LEGACY: 1,
+    VERSION_CURRENT: 2,
+    ENCRYPTION_MARKER_START: "SC:",
+    ENCRYPTION_MARKER_END: ":SC",
+    MAX_DISCORD_MESSAGE_LENGTH: 2000,
+    DEFAULT_MAX_PLAINTEXT_BYTES: 1400,
+    MILLISECONDS_PER_MINUTE: 60000,
+    GCM_ADDITIONAL_DATA: "Securecord:v2"
+};
 
-const NOISE_CHARSETS = [
-    "§¤¦¶†‡•‰™©®",
-    "αβγδεζηθικλμ",
-    "╔╗╚╝║═╬╠╣╦╩┼",
-    "░▒▓█▄▀▐▌◆◇○●",
-    "∀∂∃∅∆∇∈∏∑∞∝√",
-    "①②③④⑤⑥⑦⑧⑨⑩⑪",
-    "Ⓐ Ⓑ Ⓒ Ⓓ Ⓔ Ⓕ Ⓖ Ⓗ Ⓘ Ⓙ Ⓚ".replace(/ /g, ""),
-    "♠♣♦♥♤♧♢♡★☆✦",
-    "♈♉♊♋♌♍♎♏♐♑♒♓",
-    "☀☁☂☃❿❀❁❂❃❄❅",
-    "⚀⚁⚂⚃⚄⚅◐◑◒◓◔",
-    "▲△▴▵▶▷▸▹►▻▼▽",
-    "⊕⊖⊗⊘⊙⊚⊛⊜⊝⊞⊟",
-    "←→↑↓↔↕↖↗↘↙↚↛",
-    "⌐¬√∛∜∝∞∟∠∡∢∣",
-    "₠₡₢₣₤₥₦₧₨₩₪₫",
-    "♩♪♫♬♭♮♯◊♦◈◇",
-    "≈≉≊≋≌≍≎≏≐≑≒≓",
-    "⊛⊕⊗⊘⊙⊚⊜⊝⊞⊟⟐",
-    "✕✖✗✘✙✚✛✜✝✞✟",
-    "☰☱☲☳☴☵☶☷⚊⚋⚌",
-];
+const encoder = new TextEncoder();
+const decoder = new TextDecoder();
+const specialCharacterPattern = /[^A-Za-z0-9]/;
 
-function seededRng(seed: number) {
-    return () => {
-        seed = (seed + 0x6D2B79F5) | 0;
-        let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
-        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-    };
-}
+let failedAttempts = 0;
+let lockoutEndTime = 0;
+let lastDecryptionAttempt = 0;
 
-function makeSBox(rng: () => number): Uint8Array {
-    const sbox = new Uint8Array(256);
-    for (let i = 0; i < 256; i++) sbox[i] = i;
-    for (let i = 255; i > 0; i--) {
-        const j = Math.floor(rng() * (i + 1));
-        [sbox[i], sbox[j]] = [sbox[j], sbox[i]];
+const decryptedMessageIds = new Set<string>();
+const decryptingMessageIds = new Set<string>();
+
+function validatePassword(password: string): string[] {
+    const errors: string[] = [];
+    if (!password) {
+        errors.push("Password is required");
     }
-    return sbox;
+    return errors;
 }
 
-function invertSBox(sbox: Uint8Array): Uint8Array {
-    const inv = new Uint8Array(256);
-    for (let i = 0; i < 256; i++) inv[sbox[i]] = i;
-    return inv;
+function isRateLimited(): boolean {
+    return false;
 }
 
-function encrypt(plaintext: string, technique: number): string {
-    const prefixed = "NC:" + plaintext;
-    const raw = new TextEncoder().encode(prefixed);
-    const base = (technique + 1) * 7919 + 31337;
-    const xorRng = seededRng(base);
-    const sbox = makeSBox(seededRng(base + 65537));
-    const noiseRng = seededRng(base + 99991);
-    const charset = NOISE_CHARSETS[technique % NOISE_CHARSETS.length];
+function recordFailedAttempt(): void {}
 
-    const xored = new Uint8Array(raw.length);
-    for (let i = 0; i < raw.length; i++) xored[i] = raw[i] ^ Math.floor(xorRng() * 256);
+function resetSecurityState(): void {}
 
-    const substituted = new Uint8Array(raw.length);
-    for (let i = 0; i < raw.length; i++) substituted[i] = sbox[xored[i]];
+function getErrorMessage(error: unknown): string {
+    return error instanceof Error ? error.message : String(error);
+}
 
-    let hex = "";
-    for (let i = 0; i < substituted.length; i++) {
-        hex += substituted[i].toString(16).padStart(2, "0");
-        if (noiseRng() < 0.35) hex += charset[Math.floor(noiseRng() * charset.length)];
+function getPbkdf2Iterations(): number {
+    const iterations = Number(settings.store.pbkdf2Iterations);
+    return Number.isFinite(iterations) && iterations > 0
+        ? iterations
+        : SECURITY_CONSTANTS.LEGACY_PBKDF2_ITERATIONS;
+}
+
+function getMarkerInfo(content: string) {
+    const trimmed = content.trim();
+    if (trimmed.startsWith("SC:") && trimmed.endsWith(":SC")) {
+        return { start: "SC:", end: ":SC", trimmed };
     }
-
-    return MARKER + hex;
-}
-
-function decrypt(ciphertext: string, technique: number): string | null {
-    if (!ciphertext.startsWith(MARKER)) return null;
-    const stripped = ciphertext.slice(3).replace(/[^0-9a-fA-F]/g, "");
-    if (stripped.length < 2 || stripped.length % 2 !== 0) return null;
-
-    const bytes = new Uint8Array(stripped.length / 2);
-    for (let i = 0; i < bytes.length; i++) bytes[i] = parseInt(stripped.slice(i * 2, i * 2 + 2), 16);
-
-    const base = (technique + 1) * 7919 + 31337;
-    const xorRng = seededRng(base);
-    const sbox = makeSBox(seededRng(base + 65537));
-    const inv = invertSBox(sbox);
-
-    const unsubstituted = new Uint8Array(bytes.length);
-    for (let i = 0; i < bytes.length; i++) unsubstituted[i] = inv[bytes[i]];
-
-    const plain = new Uint8Array(bytes.length);
-    for (let i = 0; i < bytes.length; i++) plain[i] = unsubstituted[i] ^ Math.floor(xorRng() * 256);
-
-    let text: string;
-    try {
-        text = new TextDecoder("utf-8", { fatal: true }).decode(plain);
-    } catch {
-        return null;
-    }
-    return text.startsWith("NC:") ? text.slice(3) : null;
-}
-
-function isEncrypted(text: string): boolean {
-    return text.startsWith(MARKER);
-}
-
-function autoDecrypt(ciphertext: string): { text: string; technique: number; } | null {
-    if (!ciphertext.startsWith(MARKER)) return null;
-    for (let t = 0; t < 400; t++) {
-        const result = decrypt(ciphertext, t);
-        if (result !== null) return { text: result, technique: t };
+    if (trimmed.startsWith("🔒SECURE:") && trimmed.endsWith(":ENDSECURE")) {
+        return { start: "🔒SECURE:", end: ":ENDSECURE", trimmed };
     }
     return null;
 }
 
-let encryptionEnabled = false;
-let currentTechnique = 0;
+function isEncryptedMessage(content: string): boolean {
+    return getMarkerInfo(content) !== null;
+}
 
-function LockIcon({ enabled, width = 20, height = 20 }: { enabled: boolean; width?: number; height?: number; }) {
+function getEncryptedPart(content: string): string {
+    const marker = getMarkerInfo(content);
+    if (!marker) return "";
+    return marker.trimmed.slice(marker.start.length, -marker.end.length);
+}
+
+function bytesToBase64(bytes: Uint8Array, urlSafe: boolean): string {
+    let binary = "";
+
+    for (const byte of bytes) {
+        binary += String.fromCharCode(byte);
+    }
+
+    const base64 = btoa(binary);
+    if (!urlSafe) return base64;
+
+    return base64
+        .replace(/\+/g, "-")
+        .replace(/\//g, "_")
+        .replace(/=/g, "");
+}
+
+function base64ToBytes(value: string): Uint8Array {
+    let base64 = value.trim().replace(/-/g, "+").replace(/_/g, "/");
+
+    while (base64.length % 4 !== 0) {
+        base64 += "=";
+    }
+
+    const binary = atob(base64);
+    const bytes = new Uint8Array(binary.length);
+
+    for (let i = 0; i < binary.length; i++) {
+        bytes[i] = binary.charCodeAt(i);
+    }
+
+    return bytes;
+}
+
+function writeUint32(value: number): Uint8Array {
+    const bytes = new Uint8Array(SECURITY_CONSTANTS.ITERATION_LENGTH);
+    bytes[0] = value >>> 24;
+    bytes[1] = value >>> 16;
+    bytes[2] = value >>> 8;
+    bytes[3] = value;
+    return bytes;
+}
+
+function readUint32(bytes: Uint8Array, offset: number): number {
     return (
-        <svg width={width} height={height} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            {enabled
-                ? <path fill="currentColor" d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zM12 17c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zM15.1 8H8.9V6c0-1.71 1.39-3.1 3.1-3.1s3.1 1.39 3.1 3.1v2z" />
-                : <path fill="currentColor" opacity="0.8" d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6h2c0-1.66 1.34-3 3-3s3 1.34 3 3v2h-2V6c0-1.71-1.39-3.1-3.1-3.1S8.9 4.29 8.9 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2z" />
-            }
+        (bytes[offset] << 24) |
+        (bytes[offset + 1] << 16) |
+        (bytes[offset + 2] << 8) |
+        bytes[offset + 3]
+    ) >>> 0;
+}
+
+function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+    const copy = new Uint8Array(bytes.byteLength);
+    copy.set(bytes);
+    return copy.buffer;
+}
+
+async function deriveAESKey(password: string, salt: Uint8Array, iterations: number, usages: KeyUsage[]): Promise<CryptoKey> {
+    const keyMaterial = await crypto.subtle.importKey(
+        "raw",
+        toArrayBuffer(encoder.encode(password)),
+        { name: "PBKDF2" },
+        false,
+        ["deriveKey"]
+    );
+
+    return crypto.subtle.deriveKey(
+        {
+            name: "PBKDF2",
+            salt: toArrayBuffer(salt),
+            iterations,
+            hash: "SHA-256"
+        },
+        keyMaterial,
+        { name: "AES-GCM", length: 256 },
+        false,
+        usages
+    );
+}
+
+async function encryptAES(text: string, password: string): Promise<string> {
+    const data = encoder.encode(text);
+    const validationErrors = validatePassword(password);
+
+    if (validationErrors.length) {
+        throw new Error(`Password validation failed: ${validationErrors.join(", ")}`);
+    }
+
+    if (settings.store.maxPlaintextBytes > 0 && data.length > settings.store.maxPlaintextBytes) {
+        throw new Error(`Message is too long to encrypt. Limit is ${settings.store.maxPlaintextBytes} bytes.`);
+    }
+
+    const iterations = getPbkdf2Iterations();
+    const salt = crypto.getRandomValues(new Uint8Array(SECURITY_CONSTANTS.SALT_LENGTH));
+    const iv = crypto.getRandomValues(new Uint8Array(SECURITY_CONSTANTS.IV_LENGTH));
+    const key = await deriveAESKey(password, salt, iterations, ["encrypt"]);
+
+    const encrypted = await crypto.subtle.encrypt(
+        {
+            name: "AES-GCM",
+            iv: toArrayBuffer(iv),
+            additionalData: toArrayBuffer(encoder.encode(SECURITY_CONSTANTS.GCM_ADDITIONAL_DATA))
+        },
+        key,
+        toArrayBuffer(data)
+    );
+
+    const version = new Uint8Array([SECURITY_CONSTANTS.VERSION_CURRENT]);
+    const iterationBytes = writeUint32(iterations);
+    const encryptedBytes = new Uint8Array(encrypted);
+    const result = new Uint8Array(
+        version.length +
+        iterationBytes.length +
+        salt.length +
+        iv.length +
+        encryptedBytes.length
+    );
+
+    let offset = 0;
+    result.set(version, offset);
+    offset += version.length;
+    result.set(iterationBytes, offset);
+    offset += iterationBytes.length;
+    result.set(salt, offset);
+    offset += salt.length;
+    result.set(iv, offset);
+    offset += iv.length;
+    result.set(encryptedBytes, offset);
+
+    const encryptedMessage = bytesToBase64(result, settings.store.urlSafeBase64);
+    const wrappedMessage = `${SECURITY_CONSTANTS.ENCRYPTION_MARKER_START}${encryptedMessage}${SECURITY_CONSTANTS.ENCRYPTION_MARKER_END}`;
+
+    if (wrappedMessage.length > SECURITY_CONSTANTS.MAX_DISCORD_MESSAGE_LENGTH) {
+        throw new Error("Encrypted message is too long for Discord.");
+    }
+
+    return encryptedMessage;
+}
+
+async function decryptAES(encrypted: string, password: string): Promise<string> {
+    const data = base64ToBytes(encrypted);
+    const minLegacyLength = 1 + SECURITY_CONSTANTS.SALT_LENGTH + SECURITY_CONSTANTS.IV_LENGTH;
+
+    if (data.length < minLegacyLength) {
+        throw new Error("Invalid encrypted data format.");
+    }
+
+    let offset = 0;
+    const version = data[offset];
+    offset += 1;
+
+    let iterations = SECURITY_CONSTANTS.LEGACY_PBKDF2_ITERATIONS;
+    let additionalData: ArrayBuffer | undefined;
+
+    if (version === SECURITY_CONSTANTS.VERSION_CURRENT) {
+        const minCurrentLength = minLegacyLength + SECURITY_CONSTANTS.ITERATION_LENGTH;
+        if (data.length < minCurrentLength) {
+            throw new Error("Invalid encrypted data format.");
+        }
+
+        iterations = readUint32(data, offset);
+        offset += SECURITY_CONSTANTS.ITERATION_LENGTH;
+        additionalData = toArrayBuffer(encoder.encode(SECURITY_CONSTANTS.GCM_ADDITIONAL_DATA));
+    } else if (version !== SECURITY_CONSTANTS.VERSION_LEGACY || !settings.store.acceptLegacyPayloads) {
+        throw new Error("Unsupported encryption version.");
+    }
+
+    if (!iterations || iterations < 1) {
+        throw new Error("Invalid encryption parameters.");
+    }
+
+    const salt = data.slice(offset, offset + SECURITY_CONSTANTS.SALT_LENGTH);
+    offset += SECURITY_CONSTANTS.SALT_LENGTH;
+    const iv = data.slice(offset, offset + SECURITY_CONSTANTS.IV_LENGTH);
+    offset += SECURITY_CONSTANTS.IV_LENGTH;
+    const encryptedData = data.slice(offset);
+    const key = await deriveAESKey(password, salt, iterations, ["decrypt"]);
+    const decrypted = await crypto.subtle.decrypt(
+        { name: "AES-GCM", iv: toArrayBuffer(iv), additionalData },
+        key,
+        toArrayBuffer(encryptedData)
+    );
+
+    resetSecurityState();
+    return decoder.decode(decrypted);
+}
+
+const EncryptionEnabledIcon: IconComponent = ({ height = 20, width = 20, className }) => {
+    return (
+        <svg width={width} height={height} viewBox="0 0 24 24" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path fill="currentColor" d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zM12 17c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zM15.1 8H8.9V6c0-1.71 1.39-3.1 3.1-3.1s3.1 1.39 3.1 3.1v2z" />
         </svg>
     );
-}
+};
 
-function TechniqueMenu() {
-    const [, forceUpdate] = React.useReducer((x: number) => x + 1, 0);
+const EncryptionDisabledIcon: IconComponent = ({ height = 20, width = 20, className }) => {
     return (
-        <Menu.Menu navId="encrypted-message-menu" aria-label="Encryption" onClose={() => { }}>
-            {Array.from({ length: 4 }, (_, g) => (
-                <Menu.MenuItem
-                    id={`enc-group-${g}`}
-                    key={g}
-                    label={`Technique ${g * 100} - ${(g + 1) * 100 - 1}`}
-                >
-                    {Array.from({ length: 100 }, (__, i) => {
-                        const idx = g * 100 + i;
-                        return (
-                            <Menu.MenuRadioItem
-                                key={idx}
-                                id={`enc-key-${idx}`}
-                                group="enc-technique"
-                                label={`Technique ${idx}`}
-                                checked={currentTechnique === idx}
-                                action={() => {
-                                    currentTechnique = idx;
-                                    forceUpdate();
-                                    Toasts.show({
-                                        message: `🔐 Encryption key → ${idx}`,
-                                        type: Toasts.Type.SUCCESS,
-                                        id: Toasts.genId(),
-                                    });
-                                }}
-                            />
-                        );
-                    })}
-                </Menu.MenuItem>
-            ))}
-        </Menu.Menu>
-    );
-}
-
-const EncryptButton: ChatBarButtonFactory = ({ type }) => {
-    const [enabled, setEnabled] = React.useState(encryptionEnabled);
-
-    if (!["normal", "sidebar"].some(n => type.analyticsName === n)) return null;
-
-    const tooltip = enabled
-        ? `${t("Encryption active")} — Technique ${currentTechnique}`
-        : t("Encryption disabled");
-
-    return (
-        <span
-            onContextMenu={e => {
-                e.preventDefault();
-                e.stopPropagation();
-                const { ContextMenuApi } = Vencord.Webpack.Common as any;
-                ContextMenuApi?.openContextMenu?.(e, () => <TechniqueMenu />);
-            }}
-        >
-            <ChatBarButton
-                tooltip={tooltip}
-                onClick={() => {
-                    encryptionEnabled = !encryptionEnabled;
-                    setEnabled(encryptionEnabled);
-                }}
-            >
-                <LockIcon enabled={enabled} />
-            </ChatBarButton>
-        </span>
+        <svg width={width} height={height} viewBox="0 0 24 24" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path fill="currentColor" opacity="0.8" d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6h2c0-1.66 1.34-3 3-3s3 1.34 3 3v2h-2V6c0-1.71-1.39-3.1-3.1-3.1S8.9 4.29 8.9 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2z" />
+        </svg>
     );
 };
 
-/* ── Inline decryption accessory (like translate) ── */
-const DecryptionSetters = new Map<string, (v: string | undefined) => void>();
+function getChannelPassword(channelId: string): string {
+    if (!channelId) return "";
+    try {
+        const map = JSON.parse(settings.store.channelPasswords || "{}");
+        return map[channelId] || settings.store.encryptionPassword || "";
+    } catch {
+        return settings.store.encryptionPassword || "";
+    }
+}
 
-function DecryptionAccessory({ message }: { message: Message; }) {
-    const [decrypted, setDecrypted] = useState<string>();
+function setChannelPassword(channelId: string, password: string) {
+    if (!channelId) return;
+    try {
+        const map = JSON.parse(settings.store.channelPasswords || "{}");
+        if (password) {
+            map[channelId] = password;
+        } else {
+            delete map[channelId];
+        }
+        settings.store.channelPasswords = JSON.stringify(map);
+    } catch (e) {
+        console.error("[EncryptedMessage] Failed to save channel password:", e);
+    }
+}
 
-    useEffect(() => {
-        if ((message as any).vencordEmbeddedBy) return;
-        DecryptionSetters.set(message.id, setDecrypted);
-        return () => void DecryptionSetters.delete(message.id);
+function getChannelGeneratedPassword(channelId: string): string {
+    if (!channelId) return "";
+    try {
+        const map = JSON.parse(settings.store.channelGeneratedPasswords || "{}");
+        return map[channelId] || "";
+    } catch {
+        return "";
+    }
+}
+
+function setChannelGeneratedPassword(channelId: string, password: string) {
+    if (!channelId) return;
+    try {
+        const map = JSON.parse(settings.store.channelGeneratedPasswords || "{}");
+        if (password) {
+            map[channelId] = password;
+        } else {
+            delete map[channelId];
+        }
+        settings.store.channelGeneratedPasswords = JSON.stringify(map);
+    } catch (e) {
+        console.error("[EncryptedMessage] Failed to save generated password:", e);
+    }
+}
+
+function isEncryptionEnabledForChannel(channelId: string): boolean {
+    if (!channelId) return false;
+    try {
+        const map = JSON.parse(settings.store.channelEncryptionStates || "{}");
+        return !!map[channelId];
+    } catch {
+        return false;
+    }
+}
+
+function setEncryptionEnabledForChannel(channelId: string, enabled: boolean) {
+    if (!channelId) return;
+    try {
+        const map = JSON.parse(settings.store.channelEncryptionStates || "{}");
+        if (enabled) {
+            map[channelId] = true;
+        } else {
+            delete map[channelId];
+        }
+        settings.store.channelEncryptionStates = JSON.stringify(map);
+    } catch (e) {
+        console.error("[EncryptedMessage] Failed to save channel encryption state:", e);
+    }
+}
+
+function triggerDecryptForChannel(channelId: string) {
+    try {
+        const MessageCache = findByProps("clearCache", "_channelMessages");
+        if (MessageCache && MessageCache._channelMessages) {
+            const channelMessages = MessageCache._channelMessages[channelId];
+            if (channelMessages && channelMessages._array) {
+                for (const msg of channelMessages._array) {
+                    if (msg && msg.content && isEncryptedMessage(msg.content)) {
+                        decryptMessage(msg);
+                    }
+                }
+            }
+        }
+    } catch (e) {
+        console.error("[EncryptedMessage] triggerDecryptForChannel error:", e);
+    }
+}
+
+function triggerEncryptForChannel(channelId: string) {
+    try {
+        const MessageCache = findByProps("clearCache", "_channelMessages");
+        if (MessageCache && MessageCache._channelMessages) {
+            const channelMessages = MessageCache._channelMessages[channelId];
+            if (channelMessages && channelMessages._array) {
+                for (const msg of channelMessages._array) {
+                    if (msg && msg.originalEncryptedContent) {
+                        // Restore encrypted content in the live MessageStore object
+                        const storeMsg = MessageStore.getMessage(channelId, msg.id);
+                        const target = storeMsg || msg;
+                        target.content = msg.originalEncryptedContent;
+                        try { delete target._contentParsed; } catch {}
+                        try { delete target._contentParsedNodes; } catch {}
+                        try { target._contentParsed = undefined; } catch {}
+                        try { target._contentParsedNodes = undefined; } catch {}
+                        decryptedMessageIds.delete(msg.id);
+
+                        // Use original dispatch to bypass our intercept so we don't re-decrypt
+                        const origDispatch = (FluxDispatcher as any)._nc_orig_dispatch || FluxDispatcher.dispatch;
+                        const event = { type: "MESSAGE_UPDATE", message: target, _nc_skip_scan: true };
+                        origDispatch.call(FluxDispatcher, event);
+                    }
+                }
+            }
+        }
+    } catch (e) {
+        console.error("[EncryptedMessage] triggerEncryptForChannel error:", e);
+    }
+}
+
+const EncryptionSettingsModal = ({ modalProps, close }: { modalProps: any; close: () => void }) => {
+    const channelId = SelectedChannelStore.getChannelId();
+    const [generatedPassword, setGeneratedPassword] = React.useState("");
+    const [friendPassword, setFriendPassword] = React.useState("");
+    const [isEncrypted, setIsEncrypted] = React.useState(false);
+
+    const generateRandomPassword = () => {
+        const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()_+~`|}{[]:;?><,./-=";
+        let result = "";
+        const bytes = new Uint8Array(34);
+        crypto.getRandomValues(bytes);
+        for (let i = 0; i < 34; i++) {
+            result += chars[bytes[i] % chars.length];
+        }
+        // Save the new password to this channel's settings
+        if (channelId) setChannelGeneratedPassword(channelId, result);
+        setGeneratedPassword(result);
+    };
+
+    React.useEffect(() => {
+        // On open: load the existing generated password for this channel.
+        // Only generate a new one if none has been saved yet.
+        if (channelId) {
+            const existing = getChannelGeneratedPassword(channelId);
+            if (existing) {
+                setGeneratedPassword(existing);
+            } else {
+                generateRandomPassword();
+            }
+        }
     }, []);
 
-    if (!decrypted) return null;
+    React.useEffect(() => {
+        if (channelId) {
+            setFriendPassword(getChannelPassword(channelId));
+            setIsEncrypted(isEncryptionEnabledForChannel(channelId));
+        } else {
+            setFriendPassword("");
+            setIsEncrypted(false);
+        }
+    }, [channelId]);
+
+    const copyToClipboard = () => {
+        navigator.clipboard.writeText(generatedPassword);
+        showToast("Password copied to clipboard!", Toasts.Type.SUCCESS);
+    };
+
+    const shareInChat = () => {
+        if (channelId) {
+            sendMessage(channelId, { content: generatedPassword });
+            close();
+        }
+    };
+
+    const saveFriendPassword = (val: string) => {
+        setFriendPassword(val);
+        if (channelId) {
+            setChannelPassword(channelId, val);
+            triggerDecryptForChannel(channelId);
+        }
+    };
+
+    const toggleEncryption = (val: boolean) => {
+        setIsEncrypted(val);
+        if (channelId) {
+            setEncryptionEnabledForChannel(channelId, val);
+            if (val) {
+                triggerDecryptForChannel(channelId);
+            } else {
+                triggerEncryptForChannel(channelId);
+            }
+        }
+    };
 
     return (
-        <span style={{ color: "var(--text-muted)", fontStyle: "italic", fontSize: "0.9em", lineHeight: "1.2rem", display: "block", marginTop: 4 }}>
-            <LockIcon enabled={true} width={16} height={16} />
-            {" "}
-            {Parser.parse(decrypted)}
-            <br />
-            (decrypted —{" "}
-            <button
-                onClick={() => setDecrypted(undefined)}
-                style={{
-                    background: "none", border: "none", color: "var(--text-link)",
-                    cursor: "pointer", padding: 0, font: "inherit", fontStyle: "italic",
-                }}
-            >
-                Dismiss
-            </button>
-            {" | "}
-            <button
-                onClick={() => { navigator.clipboard.writeText(decrypted); Toasts.show({ message: t("Copied!"), type: Toasts.Type.SUCCESS, id: Toasts.genId() }); }}
-                style={{
-                    background: "none", border: "none", color: "var(--text-link)",
-                    cursor: "pointer", padding: 0, font: "inherit", fontStyle: "italic",
-                }}
-            >
-                {t("Copy")}
-            </button>
-            )
-        </span>
+        <Modal {...modalProps} size="small" aria-label="Password Manager">
+            <ModalHeader separator={false}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%" }}>
+                    <h1 style={{ margin: 0, fontSize: "20px", fontWeight: "bold", color: "#ffffff" }}>
+                        Password Manager
+                    </h1>
+                    <ModalCloseButton onClick={close} />
+                </div>
+            </ModalHeader>
+            <ModalContent style={{ padding: "16px 20px", color: "var(--text-normal, #dbdee1)" }}>
+                {/* Section 1: Generate Password */}
+                <div style={{ marginBottom: "24px" }}>
+                    <h2 style={{ fontSize: "12px", textTransform: "uppercase", color: "var(--text-muted, #949ba4)", marginBottom: "8px", fontWeight: 700 }}>
+                        Generate Secure Password
+                    </h2>
+                    <div style={{ display: "flex", gap: "8px", marginBottom: "12px" }}>
+                        <TextInput
+                            type="text"
+                            value={generatedPassword || ""}
+                            readOnly
+                            style={{ flex: 1 }}
+                        />
+                        <Button color="secondary" onClick={generateRandomPassword} size="medium">
+                            Regenerate
+                        </Button>
+                    </div>
+                    <div style={{ display: "flex", gap: "8px" }}>
+                        <Button color="primary" onClick={copyToClipboard} style={{ flex: 1 }}>
+                            Copy Password
+                        </Button>
+                        <Button color="brand" onClick={shareInChat} style={{ flex: 1 }}>
+                            Share in Chat
+                        </Button>
+                    </div>
+                </div>
+
+                {/* Section 2: Enter Partner's Password */}
+                <div style={{ marginBottom: "24px" }}>
+                    <h2 style={{ fontSize: "12px", textTransform: "uppercase", color: "var(--text-muted, #949ba4)", marginBottom: "8px", fontWeight: 700 }}>
+                        Partner's Encryption Password
+                    </h2>
+                    <TextInput
+                        type="text"
+                        value={friendPassword || ""}
+                        placeholder="Paste your partner's password here..."
+                        onChange={saveFriendPassword}
+                    />
+                    <p style={{ fontSize: "12px", color: "var(--text-muted, #949ba4)", marginTop: "6px", lineHeight: "1.4" }}>
+                        Paste the password received from your partner. Both of you must have the exact same password set to communicate securely.
+                    </p>
+                </div>
+
+                {/* Section 3: Toggle Encryption */}
+                <div style={{ marginTop: "16px", paddingTop: "16px", borderTop: "1px solid var(--background-modifier-accent)" }}>
+                    <Switch
+                        value={isEncrypted}
+                        onChange={toggleEncryption}
+                        note="Encrypt outgoing messages in this conversation."
+                    >
+                        Enable Encryption
+                    </Switch>
+                </div>
+            </ModalContent>
+            <ModalFooter>
+                <Button onClick={close} color="primary" look="outlined">
+                    Close
+                </Button>
+            </ModalFooter>
+        </Modal>
     );
+};
+
+const EncryptionToggleButton: ChatBarButtonFactory = ({ type }) => {
+    settings.use();
+    const channelId = SelectedChannelStore.getChannelId();
+    const enabled = channelId ? isEncryptionEnabledForChannel(channelId) : false;
+
+    const validChat = ["normal", "sidebar"].some(x => type.analyticsName === x);
+    if (!validChat) return null;
+
+    return (
+        <ChatBarButton
+            tooltip="Securecord Password Manager"
+            onClick={() => {
+                openModal(props => <EncryptionSettingsModal modalProps={props} close={props.onClose} />);
+            }}
+        >
+            {enabled ? <EncryptionEnabledIcon /> : <EncryptionDisabledIcon />}
+        </ChatBarButton>
+    );
+};
+
+function triggerReRender(message: any) {
+    const current = MessageStore.getMessage(message.channel_id, message.id);
+    if (!current) return;
+
+    FluxDispatcher.dispatch({
+        type: "MESSAGE_UPDATE",
+        message: current,
+    });
 }
 
-const messageContextPatch = (children: any, { message }: { message: any; }) => {
-    if (!children || !Array.isArray(children)) return;
-    try {
-        if (!message?.content || !isEncrypted(message.content)) return;
-        children.splice(-1, 0, (
-            <Menu.MenuGroup key="nc-encryption-group">
-                <Menu.MenuItem
-                    id="nc-decrypt-message"
-                    label={`🔓 ${t("Decrypt message")}`}
-                    action={() => {
-                        const found = autoDecrypt(message.content);
-                        if (found !== null) {
-                            const setter = DecryptionSetters.get(message.id);
-                            if (setter) {
-                                setter(found.text);
-                            } else {
-                                Toasts.show({ message: `🔓 ${found.text}`, type: Toasts.Type.SUCCESS, id: Toasts.genId() });
-                            }
-                            Toasts.show({ message: `Technique detected: ${found.technique}`, type: Toasts.Type.MESSAGE, id: Toasts.genId() });
-                        } else {
-                            Toasts.show({
-                                message: "❌ Unable to decrypt — no technique works",
-                                type: Toasts.Type.FAILURE,
-                                id: Toasts.genId(),
-                            });
-                        }
-                    }}
-                />
-            </Menu.MenuGroup>
-        ));
-    } catch (e) {
-        console.error("[EncryptedMessage] Context menu patch error:", e);
+function decryptMessage(message: any, passedChannelId?: string) {
+    if (!message || !message.content || (!isEncryptedMessage(message.content) && (!message.originalEncryptedContent || !isEncryptedMessage(message.originalEncryptedContent)))) return;
+    
+    if (!message.originalEncryptedContent) {
+        message.originalEncryptedContent = message.content;
     }
-};
+    
+    // Prevent parallel decryptions of the same message
+    if (decryptingMessageIds.has(message.id)) return;
+    decryptingMessageIds.add(message.id);
 
-const userContextPatch = (children: any) => {
-    if (!children || !Array.isArray(children)) return;
-    try {
-        if (!encryptionEnabled) return;
-        const channelId = SelectedChannelStore.getChannelId();
-        if (!channelId) return;
-
-        // On cherche le bon endroit pour insérer le menu (à la fin généralement)
-        children.push(
-            <Menu.MenuGroup key="nc-encryption-user-group">
-                <Menu.MenuItem
-                    id="nc-decrypt-all"
-                    label={`🔓 ${t("Decrypt all")}`}
-                    action={() => {
-                        const msgs = MessageStore.getMessages(channelId)?._array;
-                        if (!msgs) return;
-                        let count = 0;
-                        for (const m of msgs) {
-                            if (!m.content || !isEncrypted(m.content)) continue;
-                            const setter = DecryptionSetters.get(m.id);
-                            if (setter) {
-                                // Si on a déjà un setter (le composant est rendu)
-                                const found = autoDecrypt(m.content);
-                                if (found !== null) {
-                                    setter(found.text);
-                                    count++;
-                                }
-                            }
-                        }
-                        if (count > 0) {
-                            Toasts.show({ message: `🔓 Decrypted ${count} messages`, type: Toasts.Type.SUCCESS, id: Toasts.genId() });
-                        } else {
-                            Toasts.show({ message: "❌ No encrypted messages found on screen", type: Toasts.Type.FAILURE, id: Toasts.genId() });
-                        }
-                    }}
-                />
-            </Menu.MenuGroup>
-        );
-    } catch (e) {
-        console.error("[EncryptedMessage] userContext patch error:", e);
+    const channelId = message.channel_id || message.channelId || passedChannelId;
+    if (!channelId) {
+        decryptingMessageIds.delete(message.id);
+        return;
     }
-};
+
+    const password = getChannelPassword(channelId);
+    if (!password) {
+        decryptingMessageIds.delete(message.id);
+        return;
+    }
+
+    decryptAES(getEncryptedPart(message.originalEncryptedContent), password).then(decrypted => {
+        const updateStore = () => {
+            const current = MessageStore.getMessage(channelId, message.id);
+            if (current) {
+                if (!current.originalEncryptedContent) {
+                    current.originalEncryptedContent = current.content;
+                }
+                current.content = decrypted;
+                try { delete current._contentParsed; } catch {}
+                try { delete current._contentParsedNodes; } catch {}
+                try { current._contentParsed = undefined; } catch {}
+                try { current._contentParsedNodes = undefined; } catch {}
+                
+                decryptedMessageIds.add(message.id);
+                triggerReRender(current);
+                return true;
+            }
+            return false;
+        };
+
+        // Always update the raw payload
+        message.content = decrypted;
+        try { delete message._contentParsed; } catch {}
+        try { delete message._contentParsedNodes; } catch {}
+        try { message._contentParsed = undefined; } catch {}
+        try { message._contentParsedNodes = undefined; } catch {}
+
+        if (updateStore()) {
+            decryptingMessageIds.delete(message.id);
+            return;
+        }
+
+        // Retry up to 20 times (1 second) to find the record in MessageStore
+        let attempts = 0;
+        const interval = setInterval(() => {
+            attempts++;
+            if (updateStore() || attempts > 20) {
+                clearInterval(interval);
+                decryptingMessageIds.delete(message.id);
+            }
+        }, 50);
+    }).catch(error => {
+        decryptingMessageIds.delete(message.id);
+        recordFailedAttempt();
+        console.error("[EncryptedMessage] Decryption failed:", error);
+    });
+}
+
+function scanAndDecrypt(obj: any, parentChannelId?: string) {
+    if (!obj || typeof obj !== "object") return;
+    
+    const currentChannelId = obj.channel_id || obj.channelId || parentChannelId;
+
+    if (Array.isArray(obj)) {
+        for (const item of obj) {
+            scanAndDecrypt(item, currentChannelId);
+        }
+        return;
+    }
+    if (typeof obj.content === "string" && typeof obj.id === "string") {
+        const isEncrypted = isEncryptedMessage(obj.content) || (obj.originalEncryptedContent && isEncryptedMessage(obj.originalEncryptedContent));
+        if (isEncrypted) {
+            if (currentChannelId && isEncryptionEnabledForChannel(currentChannelId)) {
+                decryptMessage(obj, currentChannelId);
+            } else {
+                if (obj.originalEncryptedContent && obj.content !== obj.originalEncryptedContent) {
+                    obj.content = obj.originalEncryptedContent;
+                    try { delete obj._contentParsed; } catch {}
+                    try { delete obj._contentParsedNodes; } catch {}
+                    try { obj._contentParsed = undefined; } catch {}
+                    try { obj._contentParsedNodes = undefined; } catch {}
+                    
+                    decryptedMessageIds.delete(obj.id);
+                    triggerReRender(obj);
+                }
+            }
+        }
+    } else {
+        for (const k in obj) {
+            if (Object.prototype.hasOwnProperty.call(obj, k)) {
+                scanAndDecrypt(obj[k], currentChannelId);
+            }
+        }
+    }
+}
+
+const settings = definePluginSettings({
+    encryptionPassword: {
+        type: OptionType.STRING,
+        description: "AES-256 encryption password shared with trusted users.",
+        default: "",
+        placeholder: "Enter strong shared password...",
+        onChange() {
+            resetSecurityState();
+            decryptedMessageIds.clear();
+            decryptingMessageIds.clear();
+        }
+    },
+    channelPasswords: {
+        type: OptionType.STRING,
+        description: "Map of channel IDs to specific passwords in JSON.",
+        default: "{}"
+    },
+    channelGeneratedPasswords: {
+        type: OptionType.STRING,
+        description: "Map of channel IDs to the generated passwords in JSON.",
+        default: "{}"
+    },
+    channelEncryptionStates: {
+        type: OptionType.STRING,
+        description: "Map of channel IDs to their encryption active states in JSON.",
+        default: "{}"
+    },
+    enableEncryption: {
+        type: OptionType.BOOLEAN,
+        description: "Encrypt outgoing messages.",
+        default: false
+    },
+    strictPasswordPolicy: {
+        type: OptionType.BOOLEAN,
+        description: "Require uppercase, lowercase, number and special character in the password.",
+        default: false
+    },
+    minPasswordLength: {
+        type: OptionType.SLIDER,
+        description: "Minimum password length when strict policy is enabled.",
+        markers: [8, 12, 16, 20, 24, 32],
+        default: SECURITY_CONSTANTS.DEFAULT_MIN_PASSWORD_LENGTH,
+        stickToMarkers: true
+    },
+    pbkdf2Iterations: {
+        type: OptionType.SELECT,
+        description: "PBKDF2 iterations for new encrypted messages.",
+        options: [
+            { label: "Balanced 200k", value: 200000, default: true },
+            { label: "Stronger 310k", value: 310000 },
+            { label: "Very strong 600k", value: 600000 },
+            { label: "Compatibility 100k", value: 100000 }
+        ]
+    },
+    maxPlaintextBytes: {
+        type: OptionType.NUMBER,
+        description: "Maximum plaintext size in bytes before encryption. Use 0 to disable.",
+        default: SECURITY_CONSTANTS.DEFAULT_MAX_PLAINTEXT_BYTES
+    },
+    encryptEmptyMessages: {
+        type: OptionType.BOOLEAN,
+        description: "Encrypt blank or whitespace only messages.",
+        default: false
+    },
+    urlSafeBase64: {
+        type: OptionType.BOOLEAN,
+        description: "Use URL-safe base64 for new encrypted payloads.",
+        default: true
+    },
+    acceptLegacyPayloads: {
+        type: OptionType.BOOLEAN,
+        description: "Allow decrypting older Securecord version 1 payloads.",
+        default: true
+    },
+    maxFailedAttempts: {
+        type: OptionType.SLIDER,
+        description: "Failed decrypt attempts before lockout. Use 0 to disable.",
+        markers: [0, 3, 5, 8, 10],
+        default: 5,
+        stickToMarkers: true
+    },
+    lockoutMinutes: {
+        type: OptionType.SLIDER,
+        description: "Minutes to pause decrypt attempts after lockout. Use 0 to disable.",
+        markers: [0, 1, 5, 10, 30],
+        default: 5,
+        stickToMarkers: true
+    },
+    cancelOnEncryptionError: {
+        type: OptionType.BOOLEAN,
+        description: "Block plaintext sending when encryption fails.",
+        default: true
+    }
+});
 
 export default definePlugin({
     name: "EncryptedMessage",
     enabledByDefault: true,
-    description: "Encrypts your messages with 400 unique techniques (0–399). Only those who know the key can decrypt.",
+    description: "AES-256 end-to-end encryption for Discord. Share the same password with other users to communicate securely.",
     authors: [{ name: "Nightcord", id: 0n }],
     dependencies: ["ChatInputButtonAPI", "MessageEventsAPI", "MessageAccessoriesAPI"],
+    settings,
 
     chatBarButton: {
-        icon: () => <LockIcon enabled={encryptionEnabled} />,
-        render: EncryptButton,
+        icon: () => {
+            const channelId = SelectedChannelStore.getChannelId();
+            const enabled = channelId ? isEncryptionEnabledForChannel(channelId) : false;
+            return enabled ? <EncryptionEnabledIcon /> : <EncryptionDisabledIcon />;
+        },
+        render: EncryptionToggleButton
     },
 
-    renderMessageAccessory: (props: any) => props?.message ? <DecryptionAccessory message={props.message} /> : null,
+    renderMessageAccessory: (props: any) => {
+        if (props?.message && decryptedMessageIds.has(props.message.id)) {
+            return (
+                <span style={{
+                    color: "var(--text-muted)",
+                    fontSize: "0.72em",
+                    opacity: 0.65,
+                    fontStyle: "italic",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "3px",
+                    marginTop: "2px",
+                    userSelect: "none"
+                }}>
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                        <path d="M7 11V7a5 5 0 0 1 9.9-1"></path>
+                    </svg>
+                    (decrypt)
+                </span>
+            );
+        }
+        return null;
+    },
 
     start() {
-        addContextMenuPatch("message", messageContextPatch);
-        addContextMenuPatch("user-context", userContextPatch);
+        decryptedMessageIds.clear();
+
+        const origDispatch = FluxDispatcher.dispatch;
+        FluxDispatcher.dispatch = function (event: any) {
+            // Skip scan for events we explicitly marked to bypass re-decryption
+            if (!event._nc_skip_scan) {
+                try {
+                    scanAndDecrypt(event);
+                } catch (e) {
+                    console.error("[EncryptedMessage] dispatch scan error:", e);
+                }
+            }
+            return origDispatch.call(this, event);
+        };
+        (FluxDispatcher as any)._nc_orig_dispatch = origDispatch;
+
+        // Perform initial memory cache scan to decrypt already loaded messages
+        try {
+            const MessageCache = findByProps("clearCache", "_channelMessages");
+            if (MessageCache && MessageCache._channelMessages) {
+                for (const channelId in MessageCache._channelMessages) {
+                    if (!isEncryptionEnabledForChannel(channelId)) continue;
+                    const channelMessages = MessageCache._channelMessages[channelId];
+                    if (channelMessages && channelMessages._array) {
+                        for (const msg of channelMessages._array) {
+                            if (msg && msg.content && isEncryptedMessage(msg.content)) {
+                                decryptMessage(msg, channelId);
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (e) {
+            console.error("[EncryptedMessage] Cache scan error:", e);
+        }
     },
 
     stop() {
-        removeContextMenuPatch("message", messageContextPatch);
-        removeContextMenuPatch("user-context", userContextPatch);
-        encryptionEnabled = false;
-    },
-
-    async onBeforeMessageSend(_channelId: string, messageObj: { content: string; }) {
-        if (!encryptionEnabled || !messageObj.content || messageObj.content.trim().length === 0) return;
-
-        const encrypted = encrypt(messageObj.content, currentTechnique);
-        if (encrypted.length > 2000) {
-            Toasts.show({
-                message: `❌ Message too long to be encrypted (${encrypted.length}/2000)`,
-                type: Toasts.Type.FAILURE,
-                id: Toasts.genId(),
-            });
-            return { cancel: true };
+        if ((FluxDispatcher as any)._nc_orig_dispatch) {
+            FluxDispatcher.dispatch = (FluxDispatcher as any)._nc_orig_dispatch;
+            delete (FluxDispatcher as any)._nc_orig_dispatch;
         }
-        messageObj.content = encrypted;
+        decryptedMessageIds.clear();
     },
+
+    async onBeforeMessageSend(channelId, messageObj) {
+        if (!isEncryptionEnabledForChannel(channelId)) return;
+
+        if (!messageObj.content || isEncryptedMessage(messageObj.content)) return;
+        if (!settings.store.encryptEmptyMessages && !messageObj.content.trim()) return;
+
+        const password = getChannelPassword(channelId);
+        if (!password) {
+            Toasts.show({
+                message: "❌ No encryption password set for this channel.",
+                type: Toasts.Type.FAILURE,
+                id: Toasts.genId()
+            });
+            return { cancel: settings.store.cancelOnEncryptionError };
+        }
+
+        try {
+            const encryptedMessage = await encryptAES(messageObj.content, password);
+            messageObj.content = `${SECURITY_CONSTANTS.ENCRYPTION_MARKER_START}${encryptedMessage}${SECURITY_CONSTANTS.ENCRYPTION_MARKER_END}`;
+        } catch (error) {
+            const errorMessage = getErrorMessage(error);
+            Toasts.show({
+                message: `❌ Message encryption failed: ${errorMessage}`,
+                type: Toasts.Type.FAILURE,
+                id: Toasts.genId()
+            });
+            return { cancel: settings.store.cancelOnEncryptionError };
+        }
+    }
 });

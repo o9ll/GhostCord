@@ -171,25 +171,37 @@ const patchChannelContextMenu: NavContextMenuPatchCallback = (
             label="Clear Message Log"
             color="danger"
             action={() => {
+                const affectedIds = new Set<string>();
                 messages.forEach(msg => {
-                    if (msg.deleted)
+                    if (msg.deleted) {
+                        affectedIds.add(msg.id);
                         FluxDispatcher.dispatch({
                             type: "MESSAGE_DELETE",
                             channelId: channel.id,
                             id: msg.id,
                             mlDeleted: true,
                         });
-                    else
+                    } else if (msg.editHistory?.length) {
+                        affectedIds.add(msg.id);
+                        const cached = msg as any;
+                        delete cached.__messageloggerAggregated;
+                        delete cached.__messageloggerLastAppliedKey;
+                        delete cached.customRenderedContent;
+
                         updateMessage(channel.id, msg.id, {
                             editHistory: [],
+                            customRenderedContent: null,
                         });
+                    }
                 });
-                // Force immediate UI update for all removed messages
-                Promise.resolve().then(() => {
-                    messages.forEach(msg => {
-                        if (msg.deleted) updateMessage(channel.id, msg.id);
-                    });
-                });
+                // Force immediate UI update for all affected messages
+                Promise.resolve().then(() =>
+                    Promise.resolve().then(() => {
+                        affectedIds.forEach(id => {
+                            updateMessage(channel.id, id);
+                        });
+                    })
+                );
             }}
         />,
     );

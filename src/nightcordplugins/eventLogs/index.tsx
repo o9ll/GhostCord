@@ -87,7 +87,7 @@ function loadPersistLogs() {
 
 function savePersistLogs() {
     try {
-        const toSave = logs.filter(l => PERSISTENT_TYPES.has(l.type));
+        const toSave = logs.filter(l => PERSISTENT_TYPES.has(l.type)).slice(0, 1000);
         localStorage.setItem("nightcord_logs", JSON.stringify(toSave));
     } catch { }
 }
@@ -397,12 +397,9 @@ function applyFilter(entries: LogEntry[], f: string, q: string, guildId: string)
     if (!q) return r;
     const lq = q.toLowerCase();
     return r.filter(l => {
-        const user = l.authorId ? getUser(l.authorId) : null;
-        const realUsername = user?.username?.toLowerCase() || "";
-
+        const authorNameLow = l.authorName?.toLowerCase() || "";
         return l.content?.toLowerCase().includes(lq) ||
-            l.authorName?.toLowerCase().includes(lq) ||
-            realUsername.includes(lq) ||
+            authorNameLow.includes(lq) ||
             l.channelName?.toLowerCase().includes(lq) ||
             l.realId?.includes(q) ||
             l.authorId?.includes(q);

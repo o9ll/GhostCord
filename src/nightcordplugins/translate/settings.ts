@@ -19,6 +19,11 @@
 import { definePluginSettings } from "@api/Settings";
 import { OptionType } from "@utils/types";
 
+export let onAutoTranslateReceivedToggled: ((v: boolean) => void) | null = null;
+export function setOnAutoTranslateReceivedToggled(cb: (v: boolean) => void) {
+    onAutoTranslateReceivedToggled = cb;
+}
+
 export const settings = definePluginSettings({
     receivedInput: {
         type: OptionType.STRING,
@@ -68,6 +73,14 @@ export const settings = definePluginSettings({
         description: "Automatically translate your messages before sending. You can also shift/right click the translate button to toggle this",
         default: false,
         disabled: () => true // Disabled — never auto-translate
+    },
+    autoTranslateReceived: {
+        type: OptionType.BOOLEAN,
+        description: "Automatically translate received messages.",
+        default: false,
+        onChange: (v: boolean) => {
+            if (onAutoTranslateReceivedToggled) onAutoTranslateReceivedToggled(v);
+        }
     },
     showAutoTranslateTooltip: {
         type: OptionType.BOOLEAN,

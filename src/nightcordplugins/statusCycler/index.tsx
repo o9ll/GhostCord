@@ -398,8 +398,14 @@ function scheduleSpotifyLyric(reportedPosition?: number) {
             if (reportedPosition !== undefined) {
                 pendingSpotifyBackwardLyricIndex = match.rawIndex;
                 spotifyBackwardConfirmations = 1;
+                return;
+            } else {
+                // We got a backward jump without a reportedPosition (e.g. from a timeout).
+                // This could be because SpotifyPlayerStore temporarily lost the track state.
+                // Try again in 1 second instead of killing the loop.
+                lyricsTimeoutId = setTimeout(scheduleSpotifyLyric, 1_000);
+                return;
             }
-            return;
         }
     } else {
         pendingSpotifyBackwardLyricIndex = undefined;

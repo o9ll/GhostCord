@@ -308,7 +308,7 @@ export default definePlugin({
                     position: BadgePosition.START,
                     props: {
                         style: {
-                            borderRadius: "0%",
+                            borderRadius: "50%",
                             maxHeight: "22px",
                             maxWidth: "22px"
                         }
@@ -333,7 +333,7 @@ export default definePlugin({
             position: BadgePosition.START,
             props: {
                 style: {
-                    borderRadius: "0%",
+                    borderRadius: "50%",
                     maxHeight: "22px",
                     maxWidth: "22px"
                 }
