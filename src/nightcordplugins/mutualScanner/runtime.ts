@@ -14,7 +14,7 @@ import {
     createGuildHydrationController,
     hydrateGuildMemberCache,
 } from "./memberHydrator";
-import { addMutualScannerRun } from "./store";
+import { addMutualScannerRun, clearMutualScannerProgress, getMutualScannerData, saveMutualScannerProgress } from "./store";
 import type {
     MutualScannerConfig,
     MutualScannerController,
@@ -304,59 +304,84 @@ export function cancelMutualScannerWarmup() {
     showToast("Manual cache warmup cancellation requested.", Toasts.Type.MESSAGE);
 }
 
-export function startMutualScannerRun(ownerId: string | null, config: MutualScannerConfig) {
+export function startMutualScannerRun(ownerId: string | null, config: MutualScannerConfig, resume = false) {
     if (!ownerId || state.scan.active) return false;
-    if (config.selectedGuildIds.length === 0) return false;
-
-    const normalizedConfig = {
-        ...config,
-        requestDelayMs: clampNumber(Number(config.requestDelayMs) || 0, 0, 5000),
-        maxMembersPerGuild: clampNumber(Number(config.maxMembersPerGuild) || 0, 0, 50000),
-        warmupMemberBudget: clampNumber(Number(config.warmupMemberBudget) || 0, 0, 100000),
-    };
-    const startedAt = Date.now();
-    const scopeLabel = `${normalizedConfig.selectedGuildIds.length} server${normalizedConfig.selectedGuildIds.length === 1 ? "" : "s"} / any mutual`;
-    const controller = createMutualScannerController();
-    const sessionId = makeLocalId("mutual-runtime-scan");
-
-    scanController = controller;
-    updateState(current => ({
-        ...current,
-        scan: {
-            sessionId,
-            active: true,
-            startedAt,
-            scopeLabel,
-            requestDelayMs: normalizedConfig.requestDelayMs,
-            progress: {
-                phase: "collecting",
-                totalCandidates: 0,
-                scannedCount: 0,
-                matchedCount: 0,
-                skippedBots: 0,
-                skippedExistingFriends: 0,
-                profileErrors: 0,
-                countOnlyMatches: 0,
-            },
-            result: null,
-            matches: [],
-            revision: current.scan.revision,
-        },
-    }));
-    syncScanTask();
+    if (config.selectedGuildIds.length === 0 && !resume) return false;
 
     void (async () => {
+        let normalizedConfig = {
+            ...config,
+            requestDelayMs: clampNumber(Number(config.requestDelayMs) || 0, 0, 5000),
+            maxMembersPerGuild: clampNumber(Number(config.maxMembersPerGuild) || 0, 0, 50000),
+            warmupMemberBudget: clampNumber(Number(config.warmupMemberBudget) || 0, 0, 100000),
+        };
+        let startedAt = Date.now();
+        let scopeLabel = `${normalizedConfig.selectedGuildIds.length} server${normalizedConfig.selectedGuildIds.length === 1 ? "" : "s"} / any mutual`;
+        let resumeState: any = null;
+
+        if (resume) {
+            const data = await getMutualScannerData(ownerId);
+            if (data.savedProgress) {
+                resumeState = data.savedProgress;
+                normalizedConfig = resumeState.config;
+                startedAt = resumeState.startedAt;
+                scopeLabel = resumeState.scopeLabel;
+            }
+        } else {
+            // Overwrite any existing progress on fresh scan
+            await clearMutualScannerProgress(ownerId);
+        }
+
+        const controller = createMutualScannerController();
+        const sessionId = makeLocalId("mutual-runtime-scan");
+
+        scanController = controller;
+        updateState(current => ({
+            ...current,
+            scan: {
+                sessionId,
+                active: true,
+                startedAt,
+                scopeLabel,
+                requestDelayMs: normalizedConfig.requestDelayMs,
+                progress: resumeState ? {
+                    phase: "scanning",
+                    totalCandidates: resumeState.candidateGuildMap.length,
+                    scannedCount: resumeState.scannedUserIds.length,
+                    matchedCount: resumeState.matches.length,
+                    skippedBots: resumeState.stats.skippedBots ?? 0,
+                    skippedExistingFriends: resumeState.stats.skippedExistingFriends,
+                    profileErrors: resumeState.stats.profileErrors,
+                    countOnlyMatches: resumeState.stats.countOnlyMatches,
+                } : {
+                    phase: "collecting",
+                    totalCandidates: 0,
+                    scannedCount: 0,
+                    matchedCount: 0,
+                    skippedBots: 0,
+                    skippedExistingFriends: 0,
+                    profileErrors: 0,
+                    countOnlyMatches: 0,
+                },
+                result: null,
+                matches: resumeState ? [...resumeState.matches] : [],
+                revision: current.scan.revision,
+            },
+        }));
+        syncScanTask();
+
         const result = await executeMutualScan(normalizedConfig, {
             ownerId,
             controller,
+            resumeState,
             onProgress: progress => {
                 updateState(current => ({
                     ...current,
                     scan: {
-                ...current.scan,
-                requestDelayMs: normalizedConfig.requestDelayMs,
-                progress: { ...progress },
-            },
+                        ...current.scan,
+                        requestDelayMs: normalizedConfig.requestDelayMs,
+                        progress: { ...progress },
+                    },
                 }));
                 syncScanTask();
             },
@@ -372,21 +397,40 @@ export function startMutualScannerRun(ownerId: string | null, config: MutualScan
                 }));
                 syncScanTask();
             },
+            onSaveProgress: (scannedUserIds, matches, stats, candidateGuildMap) => {
+                void saveMutualScannerProgress(ownerId, {
+                    startedAt,
+                    scopeLabel,
+                    config: normalizedConfig,
+                    stats,
+                    matches,
+                    scannedUserIds,
+                    candidateGuildMap,
+                });
+            },
         });
 
-        const run: MutualScannerRun = {
-            id: makeLocalId("mutual-run"),
-            scopeLabel,
-            startedAt,
-            finishedAt: result.finishedAt,
-            status: result.status,
-            configSnapshot: normalizedConfig,
-            stats: result.stats,
-            matches: result.matches,
-            error: result.error,
-        };
+        if (result.status === "completed") {
+            await clearMutualScannerProgress(ownerId);
 
-        await addMutualScannerRun(ownerId, run);
+            const run: MutualScannerRun = {
+                id: makeLocalId("mutual-run"),
+                scopeLabel,
+                startedAt,
+                finishedAt: result.finishedAt,
+                status: result.status,
+                configSnapshot: normalizedConfig,
+                stats: result.stats,
+                matches: result.matches,
+                error: result.error,
+            };
+
+            await addMutualScannerRun(ownerId, run);
+        } else if (result.status === "cancelled") {
+            showToast(`Mutual scan paused/cancelled. You can resume it later.`, Toasts.Type.MESSAGE);
+        } else {
+            await clearMutualScannerProgress(ownerId);
+        }
 
         updateState(current => ({
             ...current,
@@ -401,9 +445,7 @@ export function startMutualScannerRun(ownerId: string | null, config: MutualScan
 
         if (result.status === "completed") {
             showToast(`Mutual scan finished with ${result.matches.length} match${result.matches.length === 1 ? "" : "es"}.`, Toasts.Type.SUCCESS);
-        } else if (result.status === "cancelled") {
-            showToast(`Mutual scan cancelled after ${result.stats.scannedCount} profile${result.stats.scannedCount === 1 ? "" : "s"}.`, Toasts.Type.MESSAGE);
-        } else {
+        } else if (result.status === "failed") {
             showToast(result.error ?? "Mutual scan failed.", Toasts.Type.FAILURE);
         }
     })();

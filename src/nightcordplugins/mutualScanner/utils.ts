@@ -7,7 +7,7 @@
 import { fetchUserProfile } from "@utils/discord";
 import { sleep } from "@utils/misc";
 import type { User } from "@vencord/discord-types";
-import { GuildMemberStore, GuildStore, IconUtils, RelationshipStore, UserProfileStore, UserStore } from "@webpack/common";
+import { GuildMemberStore, GuildStore, IconUtils, RelationshipStore, UserProfileStore, UserStore, RestAPI } from "@webpack/common";
 
 import { getHydratedGuildMemberIds, type GuildHydrationSnapshot, hydrateGuildMemberCache } from "./memberHydrator";
 import type {
@@ -332,7 +332,7 @@ function buildMatch(
         avatarUrl: identity.avatarUrl,
         guildIds: Array.from(guildIds),
         guildNames,
-        mutualFriendCount: UserProfileStore.getMutualFriendsCount(userId) ?? UserProfileStore.getMutualFriends(userId)?.length ?? 0,
+        mutualFriendCount: mutualFriends?.length ?? UserProfileStore.getMutualFriendsCount(userId) ?? 0,
         mutualFriendLabels,
         matchSource,
         matchedAt: Date.now(),
@@ -348,67 +348,96 @@ export async function executeMutualScan(
         controller?: MutualScannerController;
         onProgress?: (progress: MutualScannerProgress) => void;
         onMatch?: (match: MutualScannerMatch) => void;
+        resumeState?: any;
+        onSaveProgress?: (scannedUserIds: string[], matches: MutualScannerMatch[], stats: MutualScannerRunStats, candidateGuildMap: [string, string[]][]) => void;
     },
 ): Promise<MutualScannerExecutionResult> {
     const stats = createEmptyStats(config);
     const matches: MutualScannerMatch[] = [];
     const controller = options?.controller;
     const ownerId = options?.ownerId ?? UserStore.getCurrentUser()?.id ?? null;
-    if (config.warmMemberCacheBeforeScan && config.selectedGuildIds.length > 0) {
-        for (let index = 0; index < config.selectedGuildIds.length; index++) {
-            const guildId = config.selectedGuildIds[index];
-            const guildName = GuildStore.getGuild(guildId)?.name ?? guildId;
 
-            emitProgress(stats, 0, "warming", guildId, `${guildName} (${index + 1}/${config.selectedGuildIds.length})`, options?.onProgress);
+    let candidatesMap = new Map<string, Set<string>>();
+    let scannedUserIds: string[] = [];
 
-            const hydration = await hydrateGuildMemberCache(guildId, {
-                ownerId,
-                controller,
-                maxWaitMs: config.warmupTimeoutMs,
-                memberBudget: config.warmupMemberBudget,
-                onProgress: progress => {
-                    const suffix = progress.state === "cache"
-                        ? "cached index"
-                        : `+${progress.delta}`;
-                    emitProgress(stats, 0, "warming", guildId, `${guildName} ${suffix}`, options?.onProgress);
-                },
-            });
+    if (options?.resumeState) {
+        candidatesMap = new Map(
+            options.resumeState.candidateGuildMap.map(([k, v]: [string, string[]]) => [k, new Set(v)])
+        );
+        scannedUserIds = [...options.resumeState.scannedUserIds];
+        matches.push(...options.resumeState.matches);
+        stats.guildCount = options.resumeState.stats.guildCount;
+        stats.candidateCount = options.resumeState.stats.candidateCount;
+        stats.scannedCount = options.resumeState.stats.scannedCount;
+        stats.matchedCount = options.resumeState.stats.matchedCount;
+        stats.skippedBots = options.resumeState.stats.skippedBots ?? 0;
+        stats.skippedExistingFriends = options.resumeState.stats.skippedExistingFriends;
+        stats.profileErrors = options.resumeState.stats.profileErrors;
+        stats.countOnlyMatches = options.resumeState.stats.countOnlyMatches;
+    } else {
+        if (config.warmMemberCacheBeforeScan && config.selectedGuildIds.length > 0) {
+            for (let index = 0; index < config.selectedGuildIds.length; index++) {
+                const guildId = config.selectedGuildIds[index];
+                const guildName = GuildStore.getGuild(guildId)?.name ?? guildId;
 
-            if (hydration.cancelled) {
-                if (controller) activeControllers.delete(controller);
-                return {
-                    status: "cancelled",
-                    finishedAt: Date.now(),
-                    stats: {
-                        ...stats,
-                        matchedCount: matches.length,
+                emitProgress(stats, 0, "warming", guildId, `${guildName} (${index + 1}/${config.selectedGuildIds.length})`, options?.onProgress);
+
+                const hydration = await hydrateGuildMemberCache(guildId, {
+                    ownerId,
+                    controller,
+                    maxWaitMs: config.warmupTimeoutMs,
+                    memberBudget: config.warmupMemberBudget,
+                    onProgress: progress => {
+                        const suffix = progress.state === "cache"
+                            ? "cached index"
+                            : `+${progress.delta}`;
+                        emitProgress(stats, 0, "warming", guildId, `${guildName} ${suffix}`, options?.onProgress);
                     },
-                    matches,
-                };
-            }
+                });
 
-            if (controller?.cancelled) {
-                if (controller) activeControllers.delete(controller);
-                return {
-                    status: "cancelled",
-                    finishedAt: Date.now(),
-                    stats: {
-                        ...stats,
-                        matchedCount: matches.length,
-                    },
-                    matches,
-                };
+                if (hydration.cancelled) {
+                    if (controller) activeControllers.delete(controller);
+                    return {
+                        status: "cancelled",
+                        finishedAt: Date.now(),
+                        stats: {
+                            ...stats,
+                            matchedCount: matches.length,
+                        },
+                        matches,
+                    };
+                }
+
+                if (controller?.cancelled) {
+                    if (controller) activeControllers.delete(controller);
+                    return {
+                        status: "cancelled",
+                        finishedAt: Date.now(),
+                        stats: {
+                            ...stats,
+                            matchedCount: matches.length,
+                        },
+                        matches,
+                    };
+                }
             }
         }
+
+        candidatesMap = await collectCandidateMemberships(config, ownerId);
+        stats.guildCount = config.selectedGuildIds.length;
+        stats.candidateCount = candidatesMap.size;
     }
 
-    const candidates = Array.from((await collectCandidateMemberships(config, ownerId)).entries());
+    const candidates = Array.from(candidatesMap.entries());
+    const scannedSet = new Set(scannedUserIds);
+    const remainingCandidates = candidates.filter(([id]) => !scannedSet.has(id));
 
-    stats.candidateCount = candidates.length;
-    emitProgress(stats, candidates.length, "collecting", undefined, undefined, options?.onProgress);
+    if (!options?.resumeState) {
+        emitProgress(stats, candidates.length, "collecting", undefined, undefined, options?.onProgress);
+    }
 
     try {
-        for (const [candidateId, guildIds] of candidates) {
+        for (const [candidateId, guildIds] of remainingCandidates) {
             if (controller?.cancelled) {
                 if (controller) activeControllers.delete(controller);
                 return {
@@ -424,6 +453,9 @@ export async function executeMutualScan(
 
             if (config.skipExistingFriends && RelationshipStore.isFriend(candidateId)) {
                 stats.skippedExistingFriends++;
+                stats.scannedCount++;
+                scannedUserIds.push(candidateId);
+                options?.onSaveProgress?.(scannedUserIds, matches, { ...stats }, Array.from(candidatesMap.entries()).map(([k, v]) => [k, Array.from(v)]));
                 emitProgress(stats, candidates.length, "scanning", candidateId, buildIdentityFromUser(candidateId, UserStore.getUser(candidateId) as RawIdentity | undefined).label, options?.onProgress);
                 continue;
             }
@@ -431,15 +463,38 @@ export async function executeMutualScan(
             const previewIdentity = buildIdentityFromUser(candidateId, UserStore.getUser(candidateId) as RawIdentity | undefined);
             emitProgress(stats, candidates.length, "scanning", candidateId, previewIdentity.label, options?.onProgress);
 
-            try {
-                await fetchUserProfile(candidateId, {
-                    guild_id: Array.from(guildIds)[0],
-                    with_mutual_guilds: true,
-                    with_mutual_friends_count: true,
-                }, false);
-            } catch {
+            let success = false;
+            let retries = 0;
+            const maxRetries = 3;
+
+            while (!success && retries < maxRetries) {
+                try {
+                    await fetchUserProfile(candidateId, {
+                        guild_id: Array.from(guildIds)[0],
+                        with_mutual_guilds: true,
+                        with_mutual_friends_count: true,
+                    }, false);
+                    success = true;
+                } catch (e: any) {
+                    const status = e?.status;
+                    const retryAfter = e?.body?.retry_after;
+
+                    if (status === 429 || retryAfter) {
+                        const waitTime = (retryAfter ?? 2) * 1000 + 150;
+                        console.warn(`[MutualScanner] Rate limited on candidate ${candidateId}. Waiting ${waitTime}ms (retry ${retries + 1}/${maxRetries})...`);
+                        await sleep(waitTime);
+                        retries++;
+                    } else {
+                        break;
+                    }
+                }
+            }
+
+            if (!success) {
                 stats.profileErrors++;
                 stats.scannedCount++;
+                scannedUserIds.push(candidateId);
+                options?.onSaveProgress?.(scannedUserIds, matches, { ...stats }, Array.from(candidatesMap.entries()).map(([k, v]) => [k, Array.from(v)]));
 
                 if (config.requestDelayMs > 0) {
                     await sleep(config.requestDelayMs);
@@ -448,22 +503,64 @@ export async function executeMutualScan(
                 continue;
             }
 
-            // If a target user ID is set, only match candidates who have that user as a mutual friend
             const resolvedUser = UserStore.getUser(candidateId) as RawIdentity | undefined;
-            void resolvedUser; // may be used for future filters
+            const isBot = previewIdentity.isBot || resolvedUser?.bot === true;
 
-            const mutualFriends = UserProfileStore.getMutualFriends(candidateId);
+            if (isBot) {
+                stats.skippedBots = (stats.skippedBots ?? 0) + 1;
+                stats.scannedCount++;
+                scannedUserIds.push(candidateId);
+                options?.onSaveProgress?.(scannedUserIds, matches, { ...stats }, Array.from(candidatesMap.entries()).map(([k, v]) => [k, Array.from(v)]));
+                continue;
+            }
+
             const mutualFriendCount = UserProfileStore.getMutualFriendsCount(candidateId);
+            let mutualFriends = UserProfileStore.getMutualFriends(candidateId);
+
+            if (mutualFriendCount && mutualFriendCount > 0 && (!mutualFriends || mutualFriends.length === 0)) {
+                let relSuccess = false;
+                let relRetries = 0;
+                const maxRelRetries = 3;
+
+                while (!relSuccess && relRetries < maxRelRetries) {
+                    try {
+                        const res = await RestAPI.get({
+                            url: `/users/${candidateId}/relationships`
+                        });
+                        if (res && res.body && Array.isArray(res.body)) {
+                            mutualFriends = res.body.map((f: any) => ({
+                                user: f,
+                                key: f.id
+                            }));
+                        }
+                        relSuccess = true;
+                    } catch (e: any) {
+                        const status = e?.status;
+                        const retryAfter = e?.body?.retry_after;
+
+                        if (status === 429 || retryAfter) {
+                            const waitTime = (retryAfter ?? 2) * 1000 + 150;
+                            console.warn(`[MutualScanner] Rate limited on relationships for ${candidateId}. Waiting ${waitTime}ms (retry ${relRetries + 1}/${maxRelRetries})...`);
+                            await sleep(waitTime);
+                            relRetries++;
+                        } else {
+                            console.error("[MutualScanner] Failed to fetch relationships for", candidateId, e);
+                            break;
+                        }
+                    }
+                }
+            }
 
             if (config.targetUserId && config.targetUserId.trim()) {
-                // targetUserId mode: only keep candidates who list targetUserId as a mutual friend
                 const hastarget = Array.isArray(mutualFriends)
-                    ? mutualFriends.some((f: any) => f.id === config.targetUserId.trim())
-                    : false; // count-only mode can't verify specific friend
+                    ? mutualFriends.some((f: any) => f.key === config.targetUserId.trim() || (f.user && f.user.id === config.targetUserId.trim()))
+                    : false;
 
                 if (!hastarget) {
                     stats.skippedByTargetFilter = (stats.skippedByTargetFilter ?? 0) + 1;
                     stats.scannedCount++;
+                    scannedUserIds.push(candidateId);
+                    options?.onSaveProgress?.(scannedUserIds, matches, { ...stats }, Array.from(candidatesMap.entries()).map(([k, v]) => [k, Array.from(v)]));
 
                     if (config.requestDelayMs > 0) {
                         await sleep(config.requestDelayMs);
@@ -474,7 +571,7 @@ export async function executeMutualScan(
             }
 
             const hasAnyMutual = config.targetUserId && config.targetUserId.trim()
-                ? Array.isArray(mutualFriends) && mutualFriends.some((f: any) => f.id === config.targetUserId.trim())
+                ? Array.isArray(mutualFriends) && mutualFriends.some((f: any) => f.key === config.targetUserId.trim() || (f.user && f.user.id === config.targetUserId.trim()))
                 : Array.isArray(mutualFriends)
                     ? mutualFriends.length > 0
                     : (mutualFriendCount ?? 0) > 0;
@@ -486,12 +583,15 @@ export async function executeMutualScan(
                 }
 
                 const match = buildMatch(candidateId, guildIds, mutualFriends, matchSource);
+
                 matches.push(match);
                 stats.matchedCount = matches.length;
                 options?.onMatch?.(match);
             }
 
             stats.scannedCount++;
+            scannedUserIds.push(candidateId);
+            options?.onSaveProgress?.(scannedUserIds, matches, { ...stats }, Array.from(candidatesMap.entries()).map(([k, v]) => [k, Array.from(v)]));
             emitProgress(stats, candidates.length, "scanning", candidateId, previewIdentity.label, options?.onProgress);
 
             if (config.requestDelayMs > 0) {

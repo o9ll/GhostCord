@@ -7,7 +7,9 @@
 import { addContextMenuPatch, NavContextMenuPatchCallback, removeContextMenuPatch } from "@api/ContextMenu";
 import { HeaderBarButton } from "@api/HeaderBar";
 import { DataStore } from "@api/index";
-import definePlugin from "@utils/types";
+import { definePluginSettings } from "@api/Settings";
+import { t } from "@api/i18n";
+import definePlugin, { OptionType } from "@utils/types";
 import { findByPropsLazy, findStoreLazy } from "@webpack";
 import { Menu, React, Toasts, useEffect,useState } from "@webpack/common";
 
@@ -17,7 +19,19 @@ const UserStore = findStoreLazy("UserStore");
 const FluxDispatcher = findByPropsLazy("dispatch", "subscribe");
 
 const DS_KEY = "followuser-v2";
-const INACTIVITY_MS = 30 * 60 * 1000; // 30 minutes
+
+export const settings = definePluginSettings({
+    afkTimeout: {
+        type: OptionType.SELECT,
+        name: t("AFK Timeout"),
+        description: t("Inactivity timeout before stopping follow (AFK)"),
+        options: [
+            { label: t("10 minutes"), value: 10 * 60 * 1000 },
+            { label: t("1 hour"), value: 60 * 60 * 1000, default: true },
+            { label: t("3 hours"), value: 3 * 60 * 60 * 1000 }
+        ]
+    }
+});
 
 // ── Etat global ───────────────────────────────────────────────────────────────
 let followedId: string | null = null;
@@ -69,16 +83,21 @@ function joinChannel(channelId: string) {
     } catch { }
 }
 
-// ── Timer d'inactivite : unfollow auto apres 30min sans utilisation ───────────
+// ── Timer d'inactivite : unfollow auto apres delai d'inactivite ───────────
 function resetInactivityTimer() {
     if (inactivityTimer) clearTimeout(inactivityTimer);
     lastActivity = Date.now();
+    const timeout = settings.store.afkTimeout ?? (60 * 60 * 1000);
     inactivityTimer = setTimeout(() => {
         if (followedId) {
-            Toasts.show({ message: `Follow inactif 30min — arret du suivi de ${followedName}`, type: Toasts.Type.FAILURE, id: Toasts.genId() });
+            Toasts.show({ 
+                message: t("Inactivity timeout: stopped following {}").replace("{}", followedName), 
+                type: Toasts.Type.FAILURE, 
+                id: Toasts.genId() 
+            });
             unfollow();
         }
-    }, INACTIVITY_MS);
+    }, timeout);
 }
 
 function clearInactivityTimer() {
@@ -254,12 +273,12 @@ const ctxPatch: NavContextMenuPatchCallback = (children, props) => {
     );
 };
 
-// ── Plugin ────────────────────────────────────────────────────────────────────
 export default definePlugin({
     name: "FollowUser",
     enabledByDefault: true,
-    description: "Suit un user en vocal. Clic droit → Follow User. Coeur blanc = suivi actif (clic gauche = rejoindre, clic droit = unfollow). Auto-unfollow apres 30min d'inactivite.",
+    description: "Follows a user in voice channels. Right-click user → Follow User. White heart in header = active following (left-click = join voice channel, right-click = unfollow). Auto-unfollows after inactivity.",
     authors: [{ name: "Nightcord", id: 0n }],
+    settings,
 
     headerBarButton: {
         icon: HeartIcon,

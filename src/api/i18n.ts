@@ -565,6 +565,13 @@ const translations: Record<string, Partial<Record<Language, string>>> = {
     "so it will not be playable on iOS.": { fr: "il ne sera donc pas jouable sur iOS.", es: "por lo que no se podrá reproducir en iOS.", ru: "поэтому в него нельзя будет играть на iOS.", zh: "所以它不能在iOS上玩。" },
     "convertio web converter": { fr: "convertisseur Web converti", es: "convertidor web convertio", ru: "веб-конвертер Convertio", zh: "Convertio 网页转换器" },
     "Limitations": { fr: "Limitations", es: "Limitaciones", ru: "Ограничения", zh: "限制" },
+    "AFK Timeout": { fr: "Temps d'inactivité (AFK)", es: "Tiempo de inactividad (AFK)", ru: "Время бездействия (AFK)", zh: "挂机超时" },
+    "Inactivity timeout before stopping follow (AFK)": { fr: "Temps d'inactivité avant arrêt du suivi (AFK)", es: "Tiempo de inactividad antes de dejar de seguir (AFK)", ru: "Время бездействия перед прекращением отслеживания (AFK)", zh: "停止跟随前的无活动超时 (AFK)" },
+    "10 minutes": { fr: "10 minutes", es: "10 minutos", ru: "10 минут", zh: "10 分钟" },
+    "1 hour": { fr: "1 heure", es: "1 hora", ru: "1 час", zh: "1 小时" },
+    "3 hours": { fr: "3 heures", es: "3 horas", ru: "3 часа", zh: "3 小时" },
+    "Inactivity timeout: stopped following {}": { fr: "Suivi inactif — arrêt du suivi de {}", es: "Tiempo de inactividad: se dejó de seguir a {}", ru: "Время бездействия: прекращено отслеживание {}", zh: "无活动超时：已停止跟随 {}" },
+    "Follows a user in voice channels. Right-click user → Follow User. White heart in header = active following (left-click = join voice channel, right-click = unfollow). Auto-unfollows after inactivity.": { fr: "Suit un utilisateur dans les salons vocaux. Clic droit → Suivre l'utilisateur. Cœur blanc = suivi actif (clic gauche = rejoindre, clic droit = ne plus suivre). Arrêt automatique après inactivité.", es: "Sigue a un usuario en canales de voz. Clic derecho → Seguir usuario. Corazón blanco = seguimiento activo. Se deja de seguir automáticamente tras inactividad.", ru: "Следовать за пользователем в голосовых каналах. Автоматическое прекращение отслеживания при бездействии.", zh: "在语音频道中跟随用户。无活动后自动停止跟随。" },
 };
 
 /**

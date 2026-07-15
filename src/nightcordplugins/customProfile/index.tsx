@@ -16,7 +16,19 @@ import { AuthenticationStore, Button, FluxDispatcher, GuildMemberStore, IconUtil
 import { Settings } from "@api/Settings";
 import { getPublicPluginConfig, saveOwnPluginConfig } from "../../api/PluginSync";
 import { getStoredToken, storeToken, beginDiscordOAuth, API_BASE } from "../../api/OAuth2";
-import virtualMerge from "virtual-merge";
+function cleanMerge(original: any, overrides: any) {
+    if (!original) return original;
+    const clone = Object.create(Object.getPrototypeOf(original));
+    for (const key of Reflect.ownKeys(original)) {
+        const desc = Object.getOwnPropertyDescriptor(original, key);
+        if (desc) Object.defineProperty(clone, key, desc);
+    }
+    for (const key of Reflect.ownKeys(overrides)) {
+        const desc = Object.getOwnPropertyDescriptor(overrides, key);
+        if (desc) Object.defineProperty(clone, key, desc);
+    }
+    return clone;
+}
 
 import { tPlugin as t } from "@api/pluginI18n";
 
@@ -199,6 +211,24 @@ function getStandardBadgeDesc(key: string): string {
     }
 }
 
+function getBadgeId(key: string): string {
+    switch (key) {
+        case "Staff Discord": return "staff";
+        case "Partnered Server Owner": return "partner";
+        case "HypeSquad Events": return "hypesquad";
+        case "Bug Hunter Lvl 1": return "bug_hunter_level_1";
+        case "HypeSquad Bravery": return "hypesquad_house_1";
+        case "HypeSquad Brilliance": return "hypesquad_house_2";
+        case "HypeSquad Balance": return "hypesquad_house_3";
+        case "Early Supporter": return "premium_early_supporter";
+        case "Former Moderator": return "moderator_programs_alumni";
+        case "Bug Hunter Lvl 2": return "bug_hunter_level_2";
+        case "Early Verified Bot Developer": return "verified_developer";
+        case "Active Developer": return "active_developer";
+        default: return key.toLowerCase().replace(/ /g, "_");
+    }
+}
+
 const PROFILE_EFFECTS = [
     { id: "1139323092645183591", label: "Hydro Blast" },
     { id: "1139323093991575696", label: "Sakura Dreams" },
@@ -310,35 +340,50 @@ function checkSeeAllSettingChange() {
     _lastSeeAll = current;
 }
 
+const inFlightRequests = new Set<string>();
+
 async function fetchPublicProfileIfNeeded(userId: string) {
     checkSeeAllSettingChange();
     if (!Settings.seeAllCustomProfile) return;
     const existing = publicProfilesCache.get(userId);
     if (existing?.fetched && (Date.now() - existing.timestamp) < PUBLIC_CACHE_TTL) return;
 
-    setPublicProfileCache(userId, { fetched: false, data: null, timestamp: 0 });
+    if (inFlightRequests.has(userId)) return;
+    inFlightRequests.add(userId);
 
-    const result = await getPublicPluginConfig("customProfile", userId);
-    const dataToSave = result?.settings || null;
-    if (dataToSave) {
-        delete dataToSave.username;
-        delete dataToSave.globalName;
-        delete dataToSave.avatar;
-        delete dataToSave.bio;
-        delete dataToSave.pronouns;
-        delete dataToSave.email;
-        delete dataToSave.phone;
-        delete dataToSave.copiedUserId;
+    if (!existing) {
+        setPublicProfileCache(userId, { fetched: false, data: null, timestamp: 0 });
     }
-    setPublicProfileCache(userId, { fetched: true, data: dataToSave, timestamp: Date.now() });
 
     try {
-        const UPS = (Vencord as any).Webpack?.findByProps?.("getUserProfile", "getGuildMemberProfile");
-        if (UPS && UPS.emitChange) UPS.emitChange();
+        const result = await getPublicPluginConfig("customProfile", userId);
+        const dataToSave = result?.settings || null;
+        if (dataToSave) {
+            delete dataToSave.username;
+            delete dataToSave.globalName;
+            delete dataToSave.avatar;
+            delete dataToSave.bio;
+            delete dataToSave.pronouns;
+            delete dataToSave.email;
+            delete dataToSave.phone;
+            delete dataToSave.copiedUserId;
+        }
+        setPublicProfileCache(userId, { fetched: true, data: dataToSave, timestamp: Date.now() });
 
-        const US = (Vencord as any).Webpack?.findByStoreName("UserStore");
-        if (US && US.emitChange) US.emitChange();
-    } catch {}
+        try {
+            const UPS = (Vencord as any).Webpack?.findByProps?.("getUserProfile", "getGuildMemberProfile");
+            if (UPS && UPS.emitChange) UPS.emitChange();
+
+            const US = (Vencord as any).Webpack?.findByStoreName("UserStore");
+            if (US && US.emitChange) US.emitChange();
+        } catch {}
+    } catch (e: any) {
+        // Cache the failure so we don't spam requests for non-existent public profiles
+        setPublicProfileCache(userId, { fetched: true, data: null, timestamp: Date.now() });
+        console.warn(`[CustomProfile] Failed to fetch public profile for ${userId} (User might not have customProfile):`, e.message || e);
+    } finally {
+        inFlightRequests.delete(userId);
+    }
 }
 
 let cachedOriginalUser: any = null;
@@ -1612,7 +1657,7 @@ function CPDMNotice({ userId }: { userId: string; }) {
 export default definePlugin({
     name: "CustomProfile",
     enabledByDefault: true,
-    description: t("Visually customize your Discord profile (username, PFP, banner, badges, bio...) — persistent, only visible to you."),
+    description: "Visually customize your Discord profile (username, PFP, banner, badges, bio...) — persistent, only visible to you.",
     authors: [{ name: "Nightcord", id: 0n }],
     dependencies: ["HeaderBarAPI", "ContextMenuAPI"],
 
@@ -1718,6 +1763,7 @@ export default definePlugin({
     ],
 
     _copiedUserId: null as string | null,
+    _otherProfilesCache: new Map<string, { input: any, output: any, timestamp: number }>(),
 
     isCopiedUser(userId: string | null | undefined): boolean {
         if (!isEnabled || !userId || !this._copiedUserId) return false;
@@ -1727,207 +1773,275 @@ export default definePlugin({
     fakeCurrentUser(user: any) {
         if (!user || (!isEnabled && this._forceNative !== true) || !isMe(user.id)) return user;
 
-        // Fast cache: if same user + same data, return existing clone
+        const hasCustomUsername = !!storedData.username;
+        const hasCustomGlobalName = !!storedData.globalName;
+        const hasCustomEmail = !!storedData.email;
+        const hasCustomPhone = !!storedData.phone;
+        const hasCustomBio = !!storedData.bio;
+        const hasCustomPronouns = !!storedData.pronouns;
+        const hasCustomCreatedAt = !!storedData.createdAt;
+        const hasCustomDeco = !!storedData.decorationAsset;
+        const hasCustomBadgeFlags = storedData.badgeFlags != null;
+        const hasCustomNitro = !!storedData.nitro;
+
+        if (!hasCustomUsername && !hasCustomGlobalName && !hasCustomEmail && !hasCustomPhone && !hasCustomBio && !hasCustomPronouns && !hasCustomCreatedAt && !hasCustomDeco && !hasCustomBadgeFlags && !hasCustomNitro) {
+            return user;
+        }
+
+        // Fast cache: if same user + same data, return existing proxy
         if (cachedOriginalUser === user && cachedFakeUser && cachedDataHash === _dataVersion) {
             return cachedFakeUser;
         }
 
-        // Retrieve real original user (never a clone)
-        const realUser = (user as any).__cp_isClone ? _trueOriginalUser || user : user;
-        if (!realUser.__cp_isClone) _trueOriginalUser = realUser;
+        const proxy = new Proxy(user, {
+            get(target, prop, receiver) {
+                const desc = Object.getOwnPropertyDescriptor(target, prop);
+                if (desc && !desc.configurable) {
+                    return Reflect.get(target, prop, target);
+                }
 
-        // Read real values once
-        const realUsername = realUser.__cp_isClone ? (realUser._realUsername || realUser.username) : realUser.username;
-        const realGlobalName = realUser.__cp_isClone ? (realUser._realGlobalName ?? realUser.globalName) : realUser.globalName;
-        const realDisplayName = realUser.__cp_isClone ? (realUser._realDisplayName ?? realUser.displayName) : realUser.displayName;
+                if (prop === "__cp_isClone") return true;
+                if (prop === "username" || prop === "legacyUsername") {
+                    return isEnabled && storedData.username ? storedData.username : target.username;
+                }
+                if (prop === "globalName") {
+                    return isEnabled && storedData.globalName ? storedData.globalName : target.globalName;
+                }
+                if (prop === "displayName") {
+                    return isEnabled ? (storedData.globalName || target.displayName || target.globalName || target.username) : target.displayName;
+                }
+                if (prop === "email") {
+                    return isEnabled && storedData.email ? storedData.email : target.email;
+                }
+                if (prop === "phone") {
+                    return isEnabled && storedData.phone ? storedData.phone : target.phone;
+                }
+                if (prop === "createdAt") {
+                    if (isEnabled && storedData.createdAt) {
+                        return new Date(storedData.createdAt + "T12:00:00Z");
+                    }
+                    return target.createdAt;
+                }
+                if (prop === "avatarDecoration") {
+                    return isEnabled && storedData.decorationAsset ? null : target.avatarDecoration;
+                }
+                if (prop === "avatarDecorationData") {
+                    if (isEnabled && storedData.decorationAsset) {
+                        return {
+                            asset: storedData.decorationAsset,
+                            skuId: storedData.decorationAsset
+                        };
+                    }
+                    return target.avatarDecorationData;
+                }
+                if (prop === "publicFlags" || prop === "flags") {
+                    return isEnabled && storedData.badgeFlags != null ? storedData.badgeFlags : target[prop];
+                }
+                if (prop === "premiumType") {
+                    return isEnabled && storedData.nitro ? 2 : target.premiumType;
+                }
+                if (prop === "premiumSince") {
+                    if (isEnabled && storedData.nitro) {
+                        const LEVEL_MONTHS = [1, 1, 3, 6, 12, 24, 36, 60, 72];
+                        const seedBase = target.id || "self";
+                        const nl = storedData.nitroLevel ?? 0;
+                        const nlMin = nl === 0 ? 0 : (LEVEL_MONTHS[nl] ?? 1);
+                        const nlMax = LEVEL_MONTHS[nl + 1] ?? (nlMin + 24);
+                        return computeFakeSinceDate(nlMin, nlMax, `${seedBase}:nitro`);
+                    }
+                    return target.premiumSince;
+                }
+                if (prop === "premiumGuildSince") {
+                    if (isEnabled && storedData.nitro) {
+                        const bm = storedData.boostMonths ?? -1;
+                        if (bm >= 0) {
+                            const BOOST_M = [1, 2, 3, 6, 9, 12, 15, 18, 24];
+                            const seedBase = target.id || "self";
+                            const bmMin = BOOST_M[bm] ?? 1;
+                            const bmMax = BOOST_M[bm + 1] ?? (bmMin + 12);
+                            return computeFakeSinceDate(bmMin, bmMax, `${seedBase}:boost`);
+                        }
+                    }
+                    return target.premiumGuildSince;
+                }
+                if (prop === "getTag") {
+                    return () => {
+                        const name = storedData.username || target.username;
+                        return target.discriminator === "0" ? name : `${name}#${target.discriminator}`;
+                    };
+                }
+                if (prop === "getGlobalName") {
+                    return () => isEnabled && storedData.globalName ? storedData.globalName : target.globalName;
+                }
+                if (prop === "toString") {
+                    return () => isEnabled ? (storedData.globalName || target.displayName || target.globalName || target.username) : target.toString();
+                }
 
-        const clone = Object.create(Object.getPrototypeOf(realUser));
-
-        // Copy properties except username/globalName/displayName/legacyUsername
-        for (const key of Reflect.ownKeys(realUser)) {
-            if (key === "username" || key === "globalName" || key === "displayName" || key === "legacyUsername" || key === "__cp_isClone") continue;
-            const desc = Object.getOwnPropertyDescriptor(realUser, key);
-            if (desc) Object.defineProperty(clone, key, desc);
-        }
-        Object.defineProperty(clone, "__cp_isClone", { value: true, enumerable: false, configurable: true });
-        // Store real values on clone for next cycles
-        clone._realUsername = realUsername;
-        clone._realGlobalName = realGlobalName;
-        clone._realDisplayName = realDisplayName;
-
-        if (!isEnabled) {
-            clone.username = realUsername;
-            clone.globalName = realGlobalName;
-            clone.displayName = realDisplayName;
-            cachedOriginalUser = user;
-            cachedFakeUser = clone;
-            cachedDataHash = _dataVersion;
-            return clone;
-        }
-
-        const fakeUser = storedData.username || realUsername;
-        const hasCustomGlobalName = !!storedData.globalName;
-        const fakeGlobal = hasCustomGlobalName ? storedData.globalName : realGlobalName;
-        const origDisplay = realGlobalName || realDisplayName || realUsername;
-        const fakeDisplay = hasCustomGlobalName ? (storedData.globalName || origDisplay) : origDisplay;
-
-        Object.defineProperty(clone, "username", {
-            get: () => isEnabled ? fakeUser : realUsername,
-            set: () => { }, configurable: true, enumerable: true
-        });
-        Object.defineProperty(clone, "globalName", {
-            get: () => isEnabled ? fakeGlobal : realGlobalName,
-            set: () => { }, configurable: true, enumerable: true
-        });
-        Object.defineProperty(clone, "displayName", {
-            get: () => isEnabled ? fakeDisplay : (realDisplayName || realGlobalName || realUsername),
-            set: () => { }, configurable: true, enumerable: true
-        });
-        Object.defineProperty(clone, "legacyUsername", {
-            get: () => isEnabled ? fakeUser : realUser.legacyUsername,
-            set: () => { }, configurable: true, enumerable: true
-        });
-
-        if (storedData.email) clone.email = storedData.email;
-        if (storedData.phone) clone.phone = storedData.phone;
-
-        clone.getTag = () => {
-            const name = storedData.username || realUsername;
-            return realUser.discriminator === "0" ? name : `${name}#${realUser.discriminator}`;
-        };
-        clone.getGlobalName = () => isEnabled ? fakeGlobal : realGlobalName;
-        clone.toString = () => fakeDisplay;
-
-        // Override createdAt: Discord calculates it from the Snowflake ID via a prototype getter
-        // We redefine it directly on the clone so Discord displays the fake date
-        // without needing to scan the DOM.
-        if (storedData.createdAt) {
-            const fakeCreatedAt = new Date(storedData.createdAt + "T12:00:00Z");
-            Object.defineProperty(clone, "createdAt", {
-                get: () => fakeCreatedAt,
-                configurable: true,
-                enumerable: true
-            });
-        }
-
-        if (storedData.decorationAsset) {
-            const decoData = {
-                asset: storedData.decorationAsset,
-                skuId: storedData.decorationAsset
-            };
-            clone.avatarDecoration = null;
-            clone.avatarDecorationData = decoData;
-        }
-
-        // Override flags/nitro/boost so Discord doesn't show real native badges
-        const wantedFlags = (isEnabled && storedData.badgeFlags != null) ? storedData.badgeFlags : realUser.publicFlags;
-        clone.publicFlags = wantedFlags;
-        clone.flags = wantedFlags;
-
-        if (isEnabled && storedData.nitro) {
-            clone.premiumType = 2;
-            const LEVEL_MONTHS = [1, 1, 3, 6, 12, 24, 36, 60, 72];
-            const seedBase = realUser.id || "self";
-            const nl = storedData.nitroLevel ?? 0;
-            const nlMin = nl === 0 ? 0 : (LEVEL_MONTHS[nl] ?? 1);
-            const nlMax = LEVEL_MONTHS[nl + 1] ?? (nlMin + 24);
-            clone.premiumSince = computeFakeSinceDate(nlMin, nlMax, `${seedBase}:nitro`);
-
-            const bm = storedData.boostMonths ?? -1;
-            if (bm >= 0) {
-                const BOOST_M = [1, 2, 3, 6, 9, 12, 15, 18, 24];
-                const bmMin = BOOST_M[bm] ?? 1;
-                const bmMax = BOOST_M[bm + 1] ?? (bmMin + 12);
-                clone.premiumGuildSince = computeFakeSinceDate(bmMin, bmMax, `${seedBase}:boost`);
-            } else {
-                clone.premiumGuildSince = null;
+                const value = Reflect.get(target, prop, receiver);
+                if (typeof value === "function") {
+                    return value.bind(target);
+                }
+                return value;
+            },
+            set(target, prop, value, receiver) {
+                return Reflect.set(target, prop, value, receiver);
             }
-        }
-
-        // Save real values for next cloning cycle
-        if (!realUser.__cp_isClone) {
-            clone._realPremiumType = realUser.premiumType;
-            clone._realPremiumSince = realUser.premiumSince;
-            clone._realPremiumGuildSince = realUser.premiumGuildSince;
-        }
+        });
 
         cachedOriginalUser = user;
-        cachedFakeUser = clone;
+        cachedFakeUser = proxy;
         cachedDataHash = _dataVersion;
 
-        return clone;
+        return proxy;
     },
 
     fakeOtherUser(realUser: any, data: CustomProfileData) {
         if (!realUser || !realUser.id) return realUser;
-        const clone = Object.create(realUser);
 
-        // Username / display name
-        if (data.username) clone.username = data.username;
-        if (data.globalName) clone.globalName = data.globalName;
+        const hasCustomUsername = !!data.username;
+        const hasCustomGlobalName = !!data.globalName;
+        const hasCustomAvatar = !!data.avatar;
+        const hasCustomEmail = !!data.email;
+        const hasCustomPhone = !!data.phone;
+        const hasCustomCreatedAt = !!data.createdAt;
+        const hasCustomDeco = !!data.decorationAsset;
+        const hasCustomBadgeFlags = data.badgeFlags != null;
+        const hasCustomNitro = !!data.nitro;
 
-        // Avatar — override directly on the clone object
-        if (data.avatar) clone.avatar = data.avatar;
-
-        if (data.email) clone.email = data.email;
-        if (data.phone) clone.phone = data.phone;
-
-        // Account creation date — must override createdAt AND store the id
-        // so SnowflakeUtils.extractTimestamp gets intercepted per-user
-        if (data.createdAt) {
-            const fakeCreatedAt = new Date(data.createdAt + "T12:00:00Z");
-            Object.defineProperty(clone, "createdAt", {
-                get: () => fakeCreatedAt,
-                configurable: true,
-                enumerable: true
-            });
-            // Tag this clone so extractTimestamp can return the fake timestamp
-            clone.__cp_fakeCreatedAt = fakeCreatedAt.getTime();
+        if (!hasCustomUsername && !hasCustomGlobalName && !hasCustomAvatar && !hasCustomEmail && !hasCustomPhone && !hasCustomCreatedAt && !hasCustomDeco && !hasCustomBadgeFlags && !hasCustomNitro) {
+            return realUser;
         }
 
-        if (data.decorationAsset) {
-            const decoData = {
-                asset: data.decorationAsset,
-                skuId: data.decorationAsset
-            };
-            clone.avatarDecoration = null;
-            clone.avatarDecorationData = decoData;
-        }
+        return new Proxy(realUser, {
+            get(target, prop, receiver) {
+                const desc = Object.getOwnPropertyDescriptor(target, prop);
+                if (desc && !desc.configurable) {
+                    return Reflect.get(target, prop, target);
+                }
 
-        const wantedFlags = data.badgeFlags != null ? data.badgeFlags : realUser.publicFlags;
-        clone.publicFlags = wantedFlags;
-        clone.flags = wantedFlags;
-        if (data.nitro) {
-            clone.premiumType = 2;
-            const LEVEL_MONTHS = [1, 1, 3, 6, 12, 24, 36, 60, 72];
-            const seedBase = realUser.id || "other";
-            const nl = data.nitroLevel ?? 0;
-            const nlMin = nl === 0 ? 0 : (LEVEL_MONTHS[nl] ?? 1);
-            const nlMax = LEVEL_MONTHS[nl + 1] ?? (nlMin + 24);
-            clone.premiumSince = computeFakeSinceDate(nlMin, nlMax, `${seedBase}:nitro`);
+                if (prop === "__cp_isClone") return true;
+                if (prop === "username") {
+                    return data.username || target.username;
+                }
+                if (prop === "globalName") {
+                    return data.globalName || target.globalName;
+                }
+                if (prop === "displayName") {
+                    return data.globalName || target.displayName || target.globalName || target.username;
+                }
+                if (prop === "avatar") {
+                    return data.avatar || target.avatar;
+                }
+                if (prop === "email") {
+                    return data.email || target.email;
+                }
+                if (prop === "phone") {
+                    return data.phone || target.phone;
+                }
+                if (prop === "createdAt") {
+                    if (data.createdAt) {
+                        return new Date(data.createdAt + "T12:00:00Z");
+                    }
+                    return target.createdAt;
+                }
+                if (prop === "__cp_fakeCreatedAt") {
+                    if (data.createdAt) {
+                        return new Date(data.createdAt + "T12:00:00Z").getTime();
+                    }
+                    return undefined;
+                }
+                if (prop === "avatarDecoration") {
+                    return data.decorationAsset ? null : target.avatarDecoration;
+                }
+                if (prop === "avatarDecorationData") {
+                    if (data.decorationAsset) {
+                        return {
+                            asset: data.decorationAsset,
+                            skuId: data.decorationAsset
+                        };
+                    }
+                    return target.avatarDecorationData;
+                }
+                if (prop === "publicFlags" || prop === "flags") {
+                    return data.badgeFlags != null ? data.badgeFlags : target[prop];
+                }
+                if (prop === "premiumType") {
+                    return data.nitro ? 2 : target.premiumType;
+                }
+                if (prop === "premiumSince") {
+                    if (data.nitro) {
+                        const LEVEL_MONTHS = [1, 1, 3, 6, 12, 24, 36, 60, 72];
+                        const seedBase = target.id || "other";
+                        const nl = data.nitroLevel ?? 0;
+                        const nlMin = nl === 0 ? 0 : (LEVEL_MONTHS[nl] ?? 1);
+                        const nlMax = LEVEL_MONTHS[nl + 1] ?? (nlMin + 24);
+                        return computeFakeSinceDate(nlMin, nlMax, `${seedBase}:nitro`);
+                    }
+                    return target.premiumSince;
+                }
+                if (prop === "premiumGuildSince") {
+                    if (data.nitro) {
+                        const bm = data.boostMonths ?? -1;
+                        if (bm >= 0) {
+                            const BOOST_M = [1, 2, 3, 6, 9, 12, 15, 18, 24];
+                            const seedBase = target.id || "other";
+                            const bmMin = BOOST_M[bm] ?? 1;
+                            const bmMax = BOOST_M[bm + 1] ?? (bmMin + 12);
+                            return computeFakeSinceDate(bmMin, bmMax, `${seedBase}:boost`);
+                        }
+                    }
+                    return target.premiumGuildSince;
+                }
+                if (prop === "getTag") {
+                    return () => {
+                        const name = data.username || target.username;
+                        return target.discriminator === "0" ? name : `${name}#${target.discriminator}`;
+                    };
+                }
+                if (prop === "getGlobalName") {
+                    return () => data.globalName || target.globalName;
+                }
+                if (prop === "toString") {
+                    return () => data.globalName || target.displayName || target.globalName || target.username;
+                }
 
-            const bm = data.boostMonths ?? -1;
-            if (bm >= 0) {
-                const BOOST_M = [1, 2, 3, 6, 9, 12, 15, 18, 24];
-                const bmMin = BOOST_M[bm] ?? 1;
-                const bmMax = BOOST_M[bm + 1] ?? (bmMin + 12);
-                clone.premiumGuildSince = computeFakeSinceDate(bmMin, bmMax, `${seedBase}:boost`);
-            } else {
-                clone.premiumGuildSince = null;
+                const value = Reflect.get(target, prop, receiver);
+                if (typeof value === "function") {
+                    return value.bind(target);
+                }
+                return value;
+            },
+            set(target, prop, value, receiver) {
+                return Reflect.set(target, prop, value, receiver);
             }
-        } else {
-            // No fake nitro: hide real premiumType so Discord does not render a native Nitro badge
-            clone.premiumType = 0;
-            clone.premiumSince = null;
-            clone.premiumGuildSince = null;
-        }
-
-        clone.__cp_fake_other = true;
-        return clone;
+        });
     },
 
-    hookOtherUserProfile(profile: any, data: CustomProfileData) {
+    hookOtherUserProfile(profile: any, data: CustomProfileData, timestamp = 0) {
         if (!profile) return profile;
+
+        const hasDeco = !!data.decorationAsset;
+        const hasNitro = !!data.nitro;
+        const hasBadgeFlags = data.badgeFlags != null;
+        const hasBio = !!data.bio;
+        const hasPronouns = !!data.pronouns;
+        const hasAccentColor = data.accentColor != null;
+        const hasBanner = !!data.banner;
+        const hasEffect = !!data.profileEffectId;
+        const hasCustomBadges = Array.isArray(data.customBadgeIds) && data.customBadgeIds.length > 0;
+
+        if (!hasDeco && !hasNitro && !hasBadgeFlags && !hasBio && !hasPronouns && !hasAccentColor && !hasBanner && !hasEffect && !hasCustomBadges) {
+            return profile;
+        }
+
+        const userId = profile.userId;
+        if (userId) {
+            const cachedVal = this._otherProfilesCache.get(userId);
+            if (cachedVal && cachedVal.input === profile && cachedVal.timestamp === timestamp) {
+                return cachedVal.output;
+            }
+        }
+
         try {
             const merged: any = {};
 
@@ -1945,7 +2059,9 @@ export default definePlugin({
                 merged.avatarDecorationData = decoData;
             }
 
-            if (data.nitro || data.badgeFlags != null) {
+            const overrideFlags = data.nitro || data.badgeFlags != null;
+
+            if (overrideFlags) {
                 merged.premiumType = data.nitro ? 2 : 0;
 
                 if (data.nitro) {
@@ -1975,48 +2091,28 @@ export default definePlugin({
                 }
 
                 merged.publicFlags = (data.badgeFlags != null) ? data.badgeFlags : profile.publicFlags;
-                merged.badges = [];
             } else if (data.nitro === false) {
                 merged.premiumType = profile.premiumType ?? 0;
                 merged.premiumSince = null;
                 merged.premiumGuildSince = null;
             }
 
-            // IMPORTANT: start from merged.badges (already emptied above when we
-            // override premiumType/badgeFlags), not from profile.badges. Starting
-            // from profile.badges here silently re-introduced the *real* native
-            // badges (including a real Nitro badge) right after we had just wiped
-            // them, so viewers ended up seeing both the real badge and the fake one
-            // we push below.
-            const badgesArr = Array.isArray(merged.badges) ? [...merged.badges]
-                : Array.isArray(profile.badges) ? [...profile.badges] : [];
-                // Temporary logging to inspect REAL badges!
-                if (!window._cp_logged_badges) {
-                    window._cp_logged_badges = true;
-                    // Fetch a known Nitro user (e.g. current user if they have real Nitro, or someone else)
-                    // We'll just log any profile that passes through and has native badges!
-                }
-                if (profile.badges && profile.badges.length > 0) {
-                    // native badges received
-                }
-
+            let badgesArr = overrideFlags ? [] : (Array.isArray(profile.badges) ? [...profile.badges] : []);
+            
+            if (overrideFlags) {
                 if (data.nitro) {
                     const nl = data.nitroLevel ?? 0;
-                    // Mapped to V2 native metal milestones
-                    // 0: Nitro, 1: Bronze, 2: Silver, 3: Gold, 4: Platinum, 5: Diamond, 6: Emerald, 7: Ruby, 8: Opal
                     const LEVEL_MONTHS = [1, 1, 3, 6, 12, 24, 36, 60, 72];
                     const nitroHash = NITRO_LEVELS[nl]?.icon.split("/").pop()?.replace(".png", "") || "2ba85e8026a8614b640c2837bcdfe21b";
                     const months = LEVEL_MONTHS[nl] ?? 1;
-                    const nitroId = `premium_tenure_${months}_month_v2`; // MUST be v2, classic crashes native Discord
+                    const nitroId = `premium_tenure_${months}_month_v2`;
 
-                    // Format date & set native property required by Popout
                     const nitroSeedBase = profile?.userId || data.copiedUserId || "other";
                     const nlDateMin = nl === 0 ? 0 : months;
                     const nlMaxMonths = LEVEL_MONTHS[nl + 1] ?? (months + 24);
                     const since = computeFakeSinceDate(nlDateMin, nlMaxMonths, `${nitroSeedBase}:nitro`);
                     merged.premiumSince = since;
 
-                    // Localization
                     const lang = document.documentElement.lang || "en-US";
                     const formattedDate = since.toLocaleDateString(lang, { year: 'numeric', month: 'short', day: 'numeric' });
                     let descText = `Subscriber since ${formattedDate}`;
@@ -2035,7 +2131,6 @@ export default definePlugin({
                     if (bm >= 0) {
                         const BOOST_M = [1, 2, 3, 6, 9, 12, 15, 18, 24];
                         const boostHash = BOOST_ICONS[bm]?.split("/").pop()?.replace(".png", "") || "51040c70d4f20a921ad6674ff86fc95c";
-                        
                         const bMonths = BOOST_M[bm] ?? 1;
                         const bMaxMonths = BOOST_M[bm + 1] ?? (bMonths + 12);
                         const boostSince = computeFakeSinceDate(bMonths, bMaxMonths, `${nitroSeedBase}:boost`);
@@ -2061,19 +2156,58 @@ export default definePlugin({
                     merged.premiumGuildSince = null;
                 }
                 
+                const wantedFlags = (data.badgeFlags != null) ? data.badgeFlags : profile.publicFlags;
+                const hasBadgeWithHash = (hash: string) => badgesArr.some(b => b && b.icon === hash);
+                for (const badge of BADGES) {
+                    if (wantedFlags & badge.flag) {
+                        const hash = badge.icon.split("/").pop()?.replace(".png", "") || "";
+                        if (!hasBadgeWithHash(hash)) {
+                            badgesArr.push({
+                                id: getBadgeId(badge.key),
+                                icon: hash,
+                                description: getStandardBadgeDesc(badge.key)
+                            });
+                        }
+                    }
+                }
+            }
+
             const customIds = data.customBadgeIds ?? [];
             const isFr = (document.documentElement.lang || "en-US").startsWith("fr");
-            if (customIds.includes("quest")) badgesArr.push({ id: "quest", icon: "7d9ae358c8c5e118768335dbe68b4fb8", description: isFr ? "A terminé une quête" : "Completed a quest" });
-            if (customIds.includes("orbs")) badgesArr.push({ id: "orbs", icon: "83d8a1eb09a8d64e59233eec5d4d5c2d", description: isFr ? "Orbes — Apprenti" : "Orbs — Apprentice" });
-            if (customIds.includes("oldname")) {
+            const hasBadge = (badgeId: string) => badgesArr.some(b => b && b.id === badgeId);
+
+            if (customIds.includes("quest") && !hasBadge("quest")) badgesArr.push({ id: "quest", icon: "7d9ae358c8c5e118768335dbe68b4fb8", description: isFr ? "A terminé une quête" : "Completed a quest" });
+            if (customIds.includes("orbs") && !hasBadge("orbs")) badgesArr.push({ id: "orbs", icon: "83d8a1eb09a8d64e59233eec5d4d5c2d", description: isFr ? "Orbes — Apprenti" : "Orbs — Apprentice" });
+            if (customIds.includes("oldname") && !hasBadge("legacy_username")) {
                 const dText = data.oldName ? (isFr ? "Connu à l'origine sous le nom de " + data.oldName : "Originally known as " + data.oldName) : (isFr ? "Connu à l'origine sous le nom de ..." : "Originally known as ...");
                 badgesArr.push({ id: "legacy_username", icon: "6de6d34650760ba5551a79732e98ed60", description: dText });
             }
-            if (customIds.includes("gifting_level")) {
+            if (customIds.includes("gifting_icon") && !hasBadge("gifting_icon")) badgesArr.push({ id: "gifting_icon", icon: "64f2413c9b9803661322aaad25826b62", description: getGiftingBadgeDesc("icon") });
+            if (customIds.includes("gifting_patron") && !hasBadge("gifting_patron")) badgesArr.push({ id: "gifting_patron", icon: "ac305d1b9481f312ce4419e7f8296558", description: getGiftingBadgeDesc("patron") });
+            if (customIds.includes("gifting_champion") && !hasBadge("gifting_champion")) badgesArr.push({ id: "gifting_champion", icon: "8b7792c4f65953d3ff564f23429cb79e", description: getGiftingBadgeDesc("champion") });
+            if (customIds.includes("gifting_luminary") && !hasBadge("gifting_luminary")) badgesArr.push({ id: "gifting_luminary", icon: "3119f5504b2cd09576a323908c7c3517", description: getGiftingBadgeDesc("luminary") });
+            if (customIds.includes("gifting_hero") && !hasBadge("gifting_hero")) badgesArr.push({ id: "gifting_hero", icon: "77d65b1f210014a11eb1582ee06ab684", description: getGiftingBadgeDesc("hero") });
+            if (customIds.includes("gifting_legend") && !hasBadge("gifting_legend")) badgesArr.push({ id: "gifting_legend", icon: "7fe346cfc5da1340087d8759a9e7a395", description: getGiftingBadgeDesc("legend") });
+            if (customIds.includes("gifting_level") && !hasBadge("gifting_level")) {
                 const lvl = data.levelReached ?? 1;
                 badgesArr.push({ id: "gifting_level", icon: "ca105ad9cfc8580c765101d17bbb2323", description: getLevelBadgeDesc(lvl) });
             }
-            if (badgesArr.length > 0) merged.badges = badgesArr;
+
+            // FILTER OUT custom client badges to prevent double rendering/flicker
+            badgesArr = badgesArr.filter(b => {
+                if (!b) return false;
+                const id = (b.id || "").toLowerCase();
+                const desc = (b.description || "").toLowerCase();
+                if (id.includes("vencord") || desc.includes("vencord")) return false;
+                if (id.includes("equicord") || desc.includes("equicord")) return false;
+                if (id.includes("nightcord") || desc.includes("nightcord")) return false;
+                if (id.includes("illegalcord") || desc.includes("illegalcord")) return false;
+                if (id.includes("contributor") || desc.includes("contributor")) return false;
+                if (id === "nc-badge") return false;
+                return true;
+            });
+
+            merged.badges = badgesArr;
 
             if (data.profileEffectId) {
                 merged.profileEffectId = data.profileEffectId;
@@ -2081,7 +2215,11 @@ export default definePlugin({
                 if (!merged.premiumType) merged.premiumType = profile.premiumType || 2;
             }
 
-            return virtualMerge(profile, merged);
+            const result = cleanMerge(profile, merged);
+            if (userId) {
+                this._otherProfilesCache.set(userId, { input: profile, output: result, timestamp });
+            }
+            return result;
         } catch (e) {
             return profile;
         }
@@ -2093,6 +2231,21 @@ export default definePlugin({
 
     hookUserProfile(profile: any) {
         if (!profile || !isEnabled) return profile;
+
+        const hasDeco = !!storedData.decorationAsset;
+        const hasNitro = !!storedData.nitro;
+        const hasBadgeFlags = storedData.badgeFlags != null;
+        const hasBio = !!storedData.bio;
+        const hasPronouns = !!storedData.pronouns;
+        const hasAccentColor = storedData.accentColor != null;
+        const hasBanner = !!storedData.banner;
+        const hasEffect = !!storedData.profileEffectId;
+        const hasCustomBadges = Array.isArray(storedData.customBadgeIds) && storedData.customBadgeIds.length > 0;
+
+        if (!hasDeco && !hasNitro && !hasBadgeFlags && !hasBio && !hasPronouns && !hasAccentColor && !hasBanner && !hasEffect && !hasCustomBadges) {
+            return profile;
+        }
+
         // Cache: if same profile + same data version
         if (this._cachedProfileInput === profile && this._cachedProfile && this._cachedProfileVersion === _dataVersion) {
             return this._cachedProfile;
@@ -2114,7 +2267,9 @@ export default definePlugin({
                 merged.avatarDecorationData = decoData;
             }
 
-            if (isEnabled && (storedData.nitro || storedData.badgeFlags != null)) {
+            const overrideFlags = isEnabled && (storedData.nitro || storedData.badgeFlags != null);
+
+            if (overrideFlags) {
                 merged.premiumType = storedData.nitro ? 2 : 0;
 
                 if (storedData.nitro) {
@@ -2143,28 +2298,32 @@ export default definePlugin({
                     merged.premiumGuildSince = null;
                 }
 
-                // On s'assure que les badges originaux sont écrasés dans le profil
                 merged.publicFlags = (storedData.badgeFlags != null) ? storedData.badgeFlags : profile.publicFlags;
-                
-                const badgesArr = [];
+            } else if (isEnabled && storedData.nitro === false) {
+                merged.premiumType = profile.premiumType ?? 0;
+                merged.premiumSince = profile.premiumSince ?? null;
+                merged.premiumGuildSince = profile.premiumGuildSince ?? null;
+            } else {
+                if (profile.premiumType) merged.premiumType = profile.premiumType;
+                if (profile.premiumSince) merged.premiumSince = profile.premiumSince;
+                if (profile.premiumGuildSince) merged.premiumGuildSince = profile.premiumGuildSince;
+            }
+
+            let badgesArr = overrideFlags ? [] : (Array.isArray(profile.badges) ? [...profile.badges] : []);
+
+            if (overrideFlags) {
                 if (storedData.nitro) {
                     const nl = storedData.nitroLevel ?? 0;
-                    // Mapped to V2 native metal milestones
-                    // 0: Nitro, 1: Bronze, 2: Silver, 3: Gold, 4: Platinum, 5: Diamond, 6: Emerald, 7: Ruby, 8: Opal
                     const LEVEL_MONTHS = [1, 1, 3, 6, 12, 24, 36, 60, 72];
                     const nitroHash = NITRO_LEVELS[nl]?.icon.split("/").pop()?.replace(".png", "") || "2ba85e8026a8614b640c2837bcdfe21b";
                     const months = LEVEL_MONTHS[nl] ?? 1;
-                    const nitroId = `premium_tenure_${months}_month_v2`; // MUST be v2, classic crashes native Discord
+                    const nitroId = `premium_tenure_${months}_month_v2`;
 
-
-
-                    // Format date
                     const nitroSeedBase = UserStore.getCurrentUser()?.id || "self";
                     const nlMaxMonths = LEVEL_MONTHS[nl + 1] ?? (months + 24);
                     const since = computeFakeSinceDate(months, nlMaxMonths, `${nitroSeedBase}:nitro`);
                     merged.premiumSince = since;
 
-                    // Localization
                     const lang = document.documentElement.lang || "en-US";
                     const formattedDate = since.toLocaleDateString(lang, { year: 'numeric', month: 'short', day: 'numeric' });
                     let descText = `Subscriber since ${formattedDate}`;
@@ -2183,7 +2342,6 @@ export default definePlugin({
                     if (bm >= 0) {
                         const BOOST_M = [1, 2, 3, 6, 9, 12, 15, 18, 24];
                         const boostHash = BOOST_ICONS[bm]?.split("/").pop()?.replace(".png", "") || "51040c70d4f20a921ad6674ff86fc95c";
-                        
                         const bMonths = BOOST_M[bm] ?? 1;
                         const bMaxMonths = BOOST_M[bm + 1] ?? (bMonths + 12);
                         const boostSince = computeFakeSinceDate(bMonths, bMaxMonths, `${nitroSeedBase}:boost`);
@@ -2192,7 +2350,7 @@ export default definePlugin({
                         const bFormattedDate = boostSince.toLocaleDateString(lang, { year: 'numeric', month: 'short', day: 'numeric' });
                         let boostDescText = `Server boosting since ${bFormattedDate}`;
                         if (lang.startsWith("fr")) boostDescText = `Booster de serveurs depuis le ${bFormattedDate}`;
-                        else if (lang.startsWith("es")) boostDescText = `Mejorando servidores desde el ${bFormattedDate}`;
+                        else if (lang.startsWith("es")) boostDescText = `Mejorando servidores depuis el ${bFormattedDate}`;
                         else if (lang.startsWith("de")) boostDescText = `Server-Booster seit ${bFormattedDate}`;
 
                         badgesArr.push({ 
@@ -2205,34 +2363,60 @@ export default definePlugin({
                         merged.premiumGuildSince = null;
                     }
                 } else {
-                    // Si Nitro n'est pas simulé
-                    merged.premiumSince = profile.premiumSince ?? null;
-                    merged.premiumGuildSince = profile.premiumGuildSince ?? null;
+                    merged.premiumSince = null;
+                    merged.premiumGuildSince = null;
                 }
-                const customIds = storedData.customBadgeIds ?? [];
-                const isFr = (document.documentElement.lang || "en-US").startsWith("fr");
-                if (customIds.includes("quest")) badgesArr.push({ id: "quest", icon: "7d9ae358c8c5e118768335dbe68b4fb8", description: isFr ? "A terminé une quête" : "Completed a quest" });
-                if (customIds.includes("orbs")) badgesArr.push({ id: "orbs", icon: "83d8a1eb09a8d64e59233eec5d4d5c2d", description: isFr ? "Orbes — Apprenti" : "Orbs — Apprentice" });
-                if (customIds.includes("oldname")) {
-                    const dText = storedData.oldName ? (isFr ? "Connu à l'origine sous le nom de " + storedData.oldName : "Originally known as " + storedData.oldName) : (isFr ? "Connu à l'origine sous le nom de ..." : "Originally known as ...");
-                    badgesArr.push({ id: "legacy_username", icon: "6de6d34650760ba5551a79732e98ed60", description: dText });
+                const wantedFlags = (storedData.badgeFlags != null) ? storedData.badgeFlags : profile.publicFlags;
+                const hasBadgeWithHash = (hash: string) => badgesArr.some(b => b && b.icon === hash);
+                for (const badge of BADGES) {
+                    if (wantedFlags & badge.flag) {
+                        const hash = badge.icon.split("/").pop()?.replace(".png", "") || "";
+                        if (!hasBadgeWithHash(hash)) {
+                            badgesArr.push({
+                                id: getBadgeId(badge.key),
+                                icon: hash,
+                                description: getStandardBadgeDesc(badge.key)
+                            });
+                        }
+                    }
                 }
-                if (customIds.includes("gifting_level")) {
-                    const lvl = storedData.levelReached ?? 1;
-                    badgesArr.push({ id: "gifting_level", icon: "ca105ad9cfc8580c765101d17bbb2323", description: getLevelBadgeDesc(lvl) });
-                }
-                merged.badges = badgesArr;
-            } else if (isEnabled && storedData.nitro === false) {
-                // Si Nitro simulation est OFF, on force la suppression des badges simulés
-                merged.premiumType = profile.premiumType ?? 0;
-                merged.premiumSince = profile.premiumSince ?? null;
-                merged.premiumGuildSince = profile.premiumGuildSince ?? null;
-            } else {
-                // BACKPORT FIX : Never force to 0 or null if Nitro is not simulated.
-                if (profile.premiumType) merged.premiumType = profile.premiumType;
-                if (profile.premiumSince) merged.premiumSince = profile.premiumSince;
-                if (profile.premiumGuildSince) merged.premiumGuildSince = profile.premiumGuildSince;
             }
+
+            const customIds = storedData.customBadgeIds ?? [];
+            const isFr = (document.documentElement.lang || "en-US").startsWith("fr");
+            const hasBadge = (badgeId: string) => badgesArr.some(b => b && b.id === badgeId);
+            if (customIds.includes("quest") && !hasBadge("quest")) badgesArr.push({ id: "quest", icon: "7d9ae358c8c5e118768335dbe68b4fb8", description: isFr ? "A terminé une quête" : "Completed a quest" });
+            if (customIds.includes("orbs") && !hasBadge("orbs")) badgesArr.push({ id: "orbs", icon: "83d8a1eb09a8d64e59233eec5d4d5c2d", description: isFr ? "Orbes — Apprenti" : "Orbs — Apprentice" });
+            if (customIds.includes("oldname") && !hasBadge("legacy_username")) {
+                const dText = storedData.oldName ? (isFr ? "Connu à l'origine sous le nom de " + storedData.oldName : "Originally known as " + storedData.oldName) : (isFr ? "Connu à l'origine sous le nom de ..." : "Originally known as ...");
+                badgesArr.push({ id: "legacy_username", icon: "6de6d34650760ba5551a79732e98ed60", description: dText });
+            }
+            if (customIds.includes("gifting_icon") && !hasBadge("gifting_icon")) badgesArr.push({ id: "gifting_icon", icon: "64f2413c9b9803661322aaad25826b62", description: getGiftingBadgeDesc("icon") });
+            if (customIds.includes("gifting_patron") && !hasBadge("gifting_patron")) badgesArr.push({ id: "gifting_patron", icon: "ac305d1b9481f312ce4419e7f8296558", description: getGiftingBadgeDesc("patron") });
+            if (customIds.includes("gifting_champion") && !hasBadge("gifting_champion")) badgesArr.push({ id: "gifting_champion", icon: "8b7792c4f65953d3ff564f23429cb79e", description: getGiftingBadgeDesc("champion") });
+            if (customIds.includes("gifting_luminary") && !hasBadge("gifting_luminary")) badgesArr.push({ id: "gifting_luminary", icon: "3119f5504b2cd09576a323908c7c3517", description: getGiftingBadgeDesc("luminary") });
+            if (customIds.includes("gifting_hero") && !hasBadge("gifting_hero")) badgesArr.push({ id: "gifting_hero", icon: "77d65b1f210014a11eb1582ee06ab684", description: getGiftingBadgeDesc("hero") });
+            if (customIds.includes("gifting_legend") && !hasBadge("gifting_legend")) badgesArr.push({ id: "gifting_legend", icon: "7fe346cfc5da1340087d8759a9e7a395", description: getGiftingBadgeDesc("legend") });
+            if (customIds.includes("gifting_level") && !hasBadge("gifting_level")) {
+                const lvl = storedData.levelReached ?? 1;
+                badgesArr.push({ id: "gifting_level", icon: "ca105ad9cfc8580c765101d17bbb2323", description: getLevelBadgeDesc(lvl) });
+            }
+
+            // FILTER OUT custom client badges to prevent double rendering/flicker
+            badgesArr = badgesArr.filter(b => {
+                if (!b) return false;
+                const id = (b.id || "").toLowerCase();
+                const desc = (b.description || "").toLowerCase();
+                if (id.includes("vencord") || desc.includes("vencord")) return false;
+                if (id.includes("equicord") || desc.includes("equicord")) return false;
+                if (id.includes("nightcord") || desc.includes("nightcord")) return false;
+                if (id.includes("illegalcord") || desc.includes("illegalcord")) return false;
+                if (id.includes("contributor") || desc.includes("contributor")) return false;
+                if (id === "nc-badge") return false;
+                return true;
+            });
+
+            merged.badges = badgesArr;
 
             if (storedData.profileEffectId) {
                 merged.profileEffectId = storedData.profileEffectId;
@@ -2240,7 +2424,7 @@ export default definePlugin({
                 if (!merged.premiumType) merged.premiumType = profile.premiumType || 2;
             }
 
-            const result = virtualMerge(profile, merged);
+            const result = cleanMerge(profile, merged);
             this._cachedProfileInput = profile;
             this._cachedProfile = result;
             this._cachedProfileVersion = _dataVersion;
@@ -2297,7 +2481,7 @@ export default definePlugin({
 
             // Other users via public cache
             checkSeeAllSettingChange();
-            if (Settings.seeAllCustomProfile) {
+            if (Settings.seeAllCustomProfile && !isMe(uid)) {
                 const cached = publicProfilesCache.get(uid);
                 if (cached?.fetched && cached.data?.banner && cached.data?.nitro) {
                     return cached.data.banner;
@@ -2376,6 +2560,15 @@ export default definePlugin({
                                 };
                             }
 
+                            // Patch isStaff if it's a method to prevent Invariant Violation when faking premiumType
+                            if (typeof UserClass.prototype.isStaff === "function") {
+                                const origIsStaff = UserClass.prototype.isStaff;
+                                UserClass.prototype.isStaff = function() {
+                                    if (isEnabled && isMe(this.id) && storedData.nitro) return true;
+                                    return origIsStaff.call(this);
+                                };
+                            }
+
                             // Define a getter/setter for premiumType to intercept ALL accesses
                             // This ensures even standalone functions reading user.premiumType see the fake value!
                             Object.defineProperty(UserClass.prototype, "premiumType", {
@@ -2440,7 +2633,7 @@ export default definePlugin({
                     // Check if seeAll was just turned off and clear cache if needed
                     checkSeeAllSettingChange();
                     
-                    if (Settings.seeAllCustomProfile) {
+                    if (Settings.seeAllCustomProfile && !isMe(id)) {
                         const cached = publicProfilesCache.get(id);
                         if (cached?.fetched && cached.data) {
                             return this.fakeOtherUser(user, cached.data);
@@ -2489,11 +2682,11 @@ export default definePlugin({
                             return this.hookUserProfile(profile);
                         }
                         
-                        if (Settings.seeAllCustomProfile) {
+                        if (Settings.seeAllCustomProfile && !isMe(userId)) {
                             fetchPublicProfileIfNeeded(userId);
                             const cached = publicProfilesCache.get(userId);
                             if (cached?.fetched && cached.data && profile) {
-                                return this.hookOtherUserProfile(profile, cached.data);
+                                return this.hookOtherUserProfile(profile, cached.data, cached.timestamp);
                             }
                         }
                         
@@ -2513,11 +2706,11 @@ export default definePlugin({
                             return this.hookUserProfile(profile);
                         }
                         
-                        if (Settings.seeAllCustomProfile) {
+                        if (Settings.seeAllCustomProfile && !isMe(userId)) {
                             fetchPublicProfileIfNeeded(userId);
                             const cached = publicProfilesCache.get(userId);
                             if (cached?.fetched && cached.data && profile) {
-                                return this.hookOtherUserProfile(profile, cached.data);
+                                return this.hookOtherUserProfile(profile, cached.data, cached.timestamp);
                             }
                         }
                         
@@ -2585,7 +2778,7 @@ export default definePlugin({
                         return new Date(storedData.createdAt + "T12:00:00Z").getTime();
                     }
                     // Other users via public cache
-                    if (Settings.seeAllCustomProfile) {
+                    if (Settings.seeAllCustomProfile && !isMe(snowflake)) {
                         const cached = publicProfilesCache.get(snowflake);
                         if (cached?.fetched && cached.data?.createdAt) {
                             return new Date(cached.data.createdAt + "T12:00:00Z").getTime();
@@ -2637,7 +2830,7 @@ export default definePlugin({
                         }
 
                         // Other users via public cache
-                        if (Settings.seeAllCustomProfile && userId) {
+                        if (Settings.seeAllCustomProfile && userId && !isMe(userId)) {
                             const cached = publicProfilesCache.get(userId);
                             if (cached?.fetched && cached.data?.decorationAsset) {
                                 const asset = cached.data.decorationAsset!;
@@ -2682,272 +2875,8 @@ export default definePlugin({
 
     userProfileBadges: [
         {
-            getBadges({ userId, badges: nativeBadges }: { userId: string; guildId: string; badges: ProfileBadge[]; }) {
-                const style = { borderRadius: "50%", width: "22px", height: "22px" };
-
-                // --- Other users via public cache ---
-                const isCurrentUser = userId === UserStore.getCurrentUser()?.id;
-                if (!isCurrentUser) {
-                    if (!Settings.seeAllCustomProfile) return nativeBadges || [];
-                    const cached = publicProfilesCache.get(userId);
-                    if (!cached?.fetched || !cached.data) return nativeBadges || [];
-                    const d = cached.data;
-
-                    const wantedFlags = d.badgeFlags ?? 0;
-                    const hasNitroFake = !!d.nitro;
-                    const hasBoostFake = d.boostMonths !== undefined && d.boostMonths >= 0;
-
-                    const nl = d.nitroLevel ?? 0;
-                    const LEVEL_MONTHS = [1, 1, 3, 6, 12, 24, 36, 60, 72];
-                    const months = LEVEL_MONTHS[nl] ?? 1;
-                    const targetNitroId = `premium_tenure_${months}_month_v2`;
-
-                    const bm = d.boostMonths ?? -1;
-                    const targetBoostId = bm >= 0 ? `guild_booster_lvl${bm + 1}` : null;
-
-                    let badges: ProfileBadge[] = [...(nativeBadges || [])].filter(b => {
-                        const id = (b.id || "").toLowerCase();
-                        const desc = (b.description || "").toLowerCase();
-                        const icon = (b.iconSrc || "").toLowerCase();
-
-                        // Filter out native Nitro if faking Nitro, keeping only the target fake one
-                        if (hasNitroFake && (id.startsWith("premium") || desc.includes("subscriber") || desc.includes("abonné") || icon.includes("nitro") || icon.includes("premium"))) {
-                            if (id !== targetNitroId) return false;
-                        }
-                        // Filter out native Boost if faking Boost, keeping only the target fake one
-                        if (hasBoostFake && (id.startsWith("guild_booster") || desc.includes("booster") || desc.includes("boosting") || icon.includes("booster"))) {
-                            if (id !== targetBoostId) return false;
-                        }
-                        // Filter out custom badges to prevent duplication
-                        if (id === "quest" || icon.includes("7d9ae358c8c5e118768335dbe68b4fb8")) {
-                            return false;
-                        }
-                        if (id === "orbs" || icon.includes("83d8a1eb09a8d64e59233eec5d4d5c2d")) {
-                            return false;
-                        }
-                        if (id === "legacy_username" || icon.includes("6de6d34650760ba5551a79732e98ed60")) {
-                            return false;
-                        }
-                        // Filter out gifting badges to prevent duplication
-                        if (icon.includes("ac305d1b9481f312ce4419e7f8296558")) return false;
-                        if (icon.includes("8b7792c4f65953d3ff564f23429cb79e")) return false;
-                        if (icon.includes("3119f5504b2cd09576a323908c7c3517")) return false;
-                        if (icon.includes("77d65b1f210014a11eb1582ee06ab684")) return false;
-                        if (icon.includes("7fe346cfc5da1340087d8759a9e7a395")) return false;
-                        if (icon.includes("64f2413c9b9803661322aaad25826b62")) return false;
-                        if (icon.includes("ca105ad9cfc8580c765101d17bbb2323")) return false;
-
-                        // Logic for other flags (Staff, Partner, HypeSquad, etc.)
-                        for (const badge of BADGES) {
-                            if (wantedFlags & badge.flag) {
-                                const iconParts = badge.icon.split("/");
-                                const iconHash = iconParts[iconParts.length - 1].replace(".png", "");
-                                if (icon.includes(iconHash)) return false;
-                                const badgeKeywords = badge.label.toLowerCase().split(" ");
-                                if (badgeKeywords.some(k => k.length > 3 && desc.includes(k))) return false;
-                            }
-                        }
-
-                        return true;
-                    });
-
-                    const extra: ProfileBadge[] = [];
-                    for (const badge of BADGES) {
-                        if (wantedFlags & badge.flag) {
-                            extra.push({ description: getStandardBadgeDesc(badge.key), iconSrc: badge.icon, position: 0, props: { style } });
-                        }
-                    }
-                    const isFr = (document.documentElement.lang || "en-US").startsWith("fr");
-                    if (d.customBadgeIds?.includes("quest")) extra.push({ description: isFr ? "A terminé une quête" : "Completed a quest", iconSrc: "https://cdn.discordapp.com/badge-icons/7d9ae358c8c5e118768335dbe68b4fb8.png", position: 0, props: { style } });
-                    if (d.customBadgeIds?.includes("orbs")) extra.push({ description: isFr ? "Orbes — Apprenti" : "Orbs — Apprentice", iconSrc: "https://cdn.discordapp.com/badge-icons/83d8a1eb09a8d64e59233eec5d4d5c2d.png", position: 0, props: { style } });
-                    if (d.customBadgeIds?.includes("gifting_icon")) extra.push({ description: getGiftingBadgeDesc("icon"), iconSrc: "https://cdn.discordapp.com/badge-icons/64f2413c9b9803661322aaad25826b62.png", position: 0, props: { style } });
-                    if (d.customBadgeIds?.includes("gifting_patron")) extra.push({ description: getGiftingBadgeDesc("patron"), iconSrc: "https://cdn.discordapp.com/badge-icons/ac305d1b9481f312ce4419e7f8296558.png", position: 0, props: { style } });
-                    if (d.customBadgeIds?.includes("gifting_champion")) extra.push({ description: getGiftingBadgeDesc("champion"), iconSrc: "https://cdn.discordapp.com/badge-icons/8b7792c4f65953d3ff564f23429cb79e.png", position: 0, props: { style } });
-                    if (d.customBadgeIds?.includes("gifting_luminary")) extra.push({ description: getGiftingBadgeDesc("luminary"), iconSrc: "https://cdn.discordapp.com/badge-icons/3119f5504b2cd09576a323908c7c3517.png", position: 0, props: { style } });
-                    if (d.customBadgeIds?.includes("gifting_hero")) extra.push({ description: getGiftingBadgeDesc("hero"), iconSrc: "https://cdn.discordapp.com/badge-icons/77d65b1f210014a11eb1582ee06ab684.png", position: 0, props: { style } });
-                    if (d.customBadgeIds?.includes("gifting_legend")) extra.push({ description: getGiftingBadgeDesc("legend"), iconSrc: "https://cdn.discordapp.com/badge-icons/7fe346cfc5da1340087d8759a9e7a395.png", position: 0, props: { style } });
-                    if (d.customBadgeIds?.includes("gifting_level")) {
-                        const lvl = d.levelReached ?? 1;
-                        extra.push({ description: getLevelBadgeDesc(lvl), iconSrc: "https://cdn.discordapp.com/badge-icons/ca105ad9cfc8580c765101d17bbb2323.png", position: 0, props: { style } });
-                    }
-                    if (d.customBadgeIds?.includes("oldname")) {
-                        const oldNameText = d.oldName ? (isFr ? `Ancien nom d'utilisateur : ${d.oldName}` : `Old username: ${d.oldName}`) : (isFr ? "Ancien nom d'utilisateur" : "Old username");
-                        extra.push({ description: oldNameText, iconSrc: OLD_NAME_BADGE_ICON, position: 0, props: { style } });
-                    }
-                    badges.push(...extra);
-                    return badges;
-                }
-
-                // --- Own user ---
-                if (!isEnabled) return nativeBadges || [];
-
-                let badges: ProfileBadge[] = [...(nativeBadges || [])];
-
-                // Determine which fake badges are active to filter real ones (avoid duplicates)
-                const nl = storedData.nitroLevel ?? -1;
-                const bm = storedData.boostMonths ?? -1;
-                const hasNitroFake = storedData.nitro;
-                const hasBoostFake = bm >= 0 && bm < BOOST_ICONS.length;
-                const wantedFlags = storedData.badgeFlags ?? 0;
-
-                const ownNl = storedData.nitroLevel ?? 0;
-                const ownLevelMonths = [1, 1, 3, 6, 12, 24, 36, 60, 72];
-                const ownMonths = ownLevelMonths[ownNl] ?? 1;
-                const targetNitroId = `premium_tenure_${ownMonths}_month_v2`;
-                const targetBoostId = bm >= 0 ? `guild_booster_lvl${bm + 1}` : null;
-
-                // Robust filtering of native badges to avoid duplicates
-                badges = badges.filter(b => {
-                    const id = (b.id || "").toLowerCase();
-                    const desc = (b.description || "").toLowerCase();
-                    const icon = (b.iconSrc || "").toLowerCase();
-
-                    // Filter out native Nitro if faking Nitro, keeping only the target fake one
-                    if (hasNitroFake && (id.startsWith("premium") || desc.includes("subscriber") || desc.includes("abonné") || icon.includes("nitro") || icon.includes("premium"))) {
-                        if (id !== targetNitroId) return false;
-                    }
-                    // Filter out native Boost if faking Boost, keeping only the target fake one
-                    if (hasBoostFake && (id.startsWith("guild_booster") || desc.includes("booster") || desc.includes("boosting") || icon.includes("booster"))) {
-                        if (id !== targetBoostId) return false;
-                    }
-                    // Filter out custom badges to prevent duplication
-                    if (id === "quest" || icon.includes("7d9ae358c8c5e118768335dbe68b4fb8")) {
-                        return false;
-                    }
-                    if (id === "orbs" || icon.includes("83d8a1eb09a8d64e59233eec5d4d5c2d")) {
-                        return false;
-                    }
-                    if (id === "legacy_username" || icon.includes("6de6d34650760ba5551a79732e98ed60")) {
-                        return false;
-                    }
-                    // Filter out gifting badges to prevent duplication
-                    if (icon.includes("ac305d1b9481f312ce4419e7f8296558")) return false;
-                    if (icon.includes("8b7792c4f65953d3ff564f23429cb79e")) return false;
-                    if (icon.includes("3119f5504b2cd09576a323908c7c3517")) return false;
-                    if (icon.includes("77d65b1f210014a11eb1582ee06ab684")) return false;
-                    if (icon.includes("7fe346cfc5da1340087d8759a9e7a395")) return false;
-                    if (icon.includes("64f2413c9b9803661322aaad25826b62")) return false;
-
-                    // Logic for other flags (Staff, Partner, HypeSquad, etc.)
-                    for (const badge of BADGES) {
-                        if (wantedFlags & badge.flag) {
-                            const iconParts = badge.icon.split("/");
-                            const iconHash = iconParts[iconParts.length - 1].replace(".png", "");
-                            if (icon.includes(iconHash)) return false;
-                            const badgeKeywords = badge.label.toLowerCase().split(" ");
-                            if (badgeKeywords.some(k => k.length > 3 && desc.includes(k))) return false;
-                        }
-                    }
-
-                    return true;
-                });
-
-                const badgeList: ProfileBadge[] = [];
-
-                const isFr = (document.documentElement.lang || "en-US").startsWith("fr");
-
-                // 1. Staff Discord
-                if (storedData.badgeFlags && (storedData.badgeFlags & FLAG.STAFF)) {
-                    badgeList.push({ description: getStandardBadgeDesc("Staff Discord"), iconSrc: "https://cdn.discordapp.com/badge-icons/5e74e9b61934fc1f67c65515d1f7e60d.png", position: 0, props: { style } });
-                }
-
-                // 2. Partner
-                if (storedData.badgeFlags && (storedData.badgeFlags & FLAG.PARTNER)) {
-                    badgeList.push({ description: getStandardBadgeDesc("Partnered Server Owner"), iconSrc: "https://cdn.discordapp.com/badge-icons/3f9748e53446a137a052f3454e2de41e.png", position: 0, props: { style } });
-                }
-
-                // 3. NITRO (Removed here because we now inject it natively in the profile.badges array for rich tooltips)
-
-                // 4. HypeSquad Events
-                if (storedData.badgeFlags && (storedData.badgeFlags & FLAG.HYPESQUAD)) {
-                    badgeList.push({ description: getStandardBadgeDesc("HypeSquad Events"), iconSrc: "https://cdn.discordapp.com/badge-icons/bf01d1073931f921909045f3a39fd264.png", position: 0, props: { style } });
-                }
-
-                // 5. Bug Hunter 2
-                if (storedData.badgeFlags && (storedData.badgeFlags & FLAG.BUG_HUNTER_2)) {
-                    badgeList.push({ description: getStandardBadgeDesc("Bug Hunter Lvl 2"), iconSrc: "https://cdn.discordapp.com/badge-icons/848f79194d4be5ff5f81505cbd0ce1e6.png", position: 0, props: { style } });
-                }
-
-                // 6. House Badges (HypeSquad Houses)
-                if (storedData.badgeFlags && (storedData.badgeFlags & FLAG.BALANCE)) {
-                    badgeList.push({ description: getStandardBadgeDesc("HypeSquad Balance"), iconSrc: "https://cdn.discordapp.com/badge-icons/3aa41de486fa12454c3761e8e223442e.png", position: 0, props: { style } });
-                }
-                if (storedData.badgeFlags && (storedData.badgeFlags & FLAG.BRAVERY)) {
-                    badgeList.push({ description: getStandardBadgeDesc("HypeSquad Bravery"), iconSrc: "https://cdn.discordapp.com/badge-icons/8a88d63823d8a71cd5e390baa45efa02.png", position: 0, props: { style } });
-                }
-                if (storedData.badgeFlags && (storedData.badgeFlags & FLAG.BRILLIANCE)) {
-                    badgeList.push({ description: getStandardBadgeDesc("HypeSquad Brilliance"), iconSrc: "https://cdn.discordapp.com/badge-icons/011940fd013da3f7fb926e4a1cd2e618.png", position: 0, props: { style } });
-                }
-
-                // 7. Bug Hunter 1
-                if (storedData.badgeFlags && (storedData.badgeFlags & FLAG.BUG_HUNTER_1)) {
-                    badgeList.push({ description: getStandardBadgeDesc("Bug Hunter Lvl 1"), iconSrc: "https://cdn.discordapp.com/badge-icons/2717692c7dca7289b35297368a940dd0.png", position: 0, props: { style } });
-                }
-
-                // 8. Developer (Verified)
-                if (storedData.badgeFlags && (storedData.badgeFlags & FLAG.DEV_VERIFIED)) {
-                    badgeList.push({ description: getStandardBadgeDesc("Early Verified Bot Developer"), iconSrc: "https://cdn.discordapp.com/badge-icons/6df5892e0f35b051f8b61eace34f4967.png", position: 0, props: { style } });
-                }
-
-                // 9. Former Moderator
-                if (storedData.badgeFlags && (storedData.badgeFlags & FLAG.MOD_ALUMNI)) {
-                    badgeList.push({ description: getStandardBadgeDesc("Former Moderator"), iconSrc: "https://cdn.discordapp.com/badge-icons/fee1624003e2fee35cb398e125dc479b.png", position: 0, props: { style } });
-                }
-
-                // 10. Early Supporter
-                if (storedData.badgeFlags && (storedData.badgeFlags & FLAG.EARLY_SUPPORTER)) {
-                    badgeList.push({ description: getStandardBadgeDesc("Early Supporter"), iconSrc: "https://cdn.discordapp.com/badge-icons/7060786766c9c840eb3019e725d2b358.png", position: 0, props: { style } });
-                }
-
-                // 11. SERVER BOOST (Removed here because we inject it natively now)
-
-                // 12. Active Developer
-                if (storedData.badgeFlags && (storedData.badgeFlags & FLAG.ACTIVE_DEVELOPER)) {
-                    badgeList.push({ description: getStandardBadgeDesc("Active Developer"), iconSrc: "https://cdn.discordapp.com/badge-icons/6bdc42827a38498929a4920da12695d9.png", position: 0, props: { style } });
-                }
-
-                // 13. Old Name (Ancien nom d'utilisateur)
-                if (storedData.customBadgeIds?.includes("oldname")) {
-                    const oldNameText = storedData.oldName ? (isFr ? `Ancien nom d'utilisateur : ${storedData.oldName}` : `Old username: ${storedData.oldName}`) : (isFr ? "Ancien nom d'utilisateur" : "Old username");
-                    badgeList.push({ description: oldNameText, iconSrc: OLD_NAME_BADGE_ICON, position: 0, props: { style, title: oldNameText } });
-                }
-
-                // 14. Completed Quest (Quêtes)
-                if (storedData.customBadgeIds?.includes("quest")) {
-                    badgeList.push({ description: isFr ? "A terminé une quête" : "Completed a quest", iconSrc: "https://cdn.discordapp.com/badge-icons/7d9ae358c8c5e118768335dbe68b4fb8.png", position: 0, props: { style } });
-                }
-
-                // 15. Orbs
-                if (storedData.customBadgeIds?.includes("orbs")) {
-                    badgeList.push({ description: isFr ? "Orbes — Apprenti" : "Orbs — Apprentice", iconSrc: "https://cdn.discordapp.com/badge-icons/83d8a1eb09a8d64e59233eec5d4d5c2d.png", position: 0, props: { style } });
-                }
-
-                // 16. Gifting Badges
-                if (storedData.customBadgeIds?.includes("gifting_icon")) {
-                    badgeList.push({ description: getGiftingBadgeDesc("icon"), iconSrc: "https://cdn.discordapp.com/badge-icons/64f2413c9b9803661322aaad25826b62.png", position: 0, props: { style } });
-                }
-                if (storedData.customBadgeIds?.includes("gifting_patron")) {
-                    badgeList.push({ description: getGiftingBadgeDesc("patron"), iconSrc: "https://cdn.discordapp.com/badge-icons/ac305d1b9481f312ce4419e7f8296558.png", position: 0, props: { style } });
-                }
-                if (storedData.customBadgeIds?.includes("gifting_champion")) {
-                    badgeList.push({ description: getGiftingBadgeDesc("champion"), iconSrc: "https://cdn.discordapp.com/badge-icons/8b7792c4f65953d3ff564f23429cb79e.png", position: 0, props: { style } });
-                }
-                if (storedData.customBadgeIds?.includes("gifting_luminary")) {
-                    badgeList.push({ description: getGiftingBadgeDesc("luminary"), iconSrc: "https://cdn.discordapp.com/badge-icons/3119f5504b2cd09576a323908c7c3517.png", position: 0, props: { style } });
-                }
-                if (storedData.customBadgeIds?.includes("gifting_hero")) {
-                    badgeList.push({ description: getGiftingBadgeDesc("hero"), iconSrc: "https://cdn.discordapp.com/badge-icons/77d65b1f210014a11eb1582ee06ab684.png", position: 0, props: { style } });
-                }
-                if (storedData.customBadgeIds?.includes("gifting_legend")) {
-                    badgeList.push({ description: getGiftingBadgeDesc("legend"), iconSrc: "https://cdn.discordapp.com/badge-icons/7fe346cfc5da1340087d8759a9e7a395.png", position: 0, props: { style } });
-                }
-                if (storedData.customBadgeIds?.includes("gifting_level")) {
-                    const lvl = storedData.levelReached ?? 1;
-                    badgeList.push({ description: getLevelBadgeDesc(lvl), iconSrc: "https://cdn.discordapp.com/badge-icons/ca105ad9cfc8580c765101d17bbb2323.png", position: 0, props: { style } });
-                }
-
-                badges.push(...badgeList);
-                return badges;
+            getBadges() {
+                return [];
             }
         } as ProfileBadge
     ] as ProfileBadge[],

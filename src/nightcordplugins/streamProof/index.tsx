@@ -18,9 +18,9 @@ const RTCConnectionStore = findByPropsLazy("getMediaSessionId");
 const StreamerModeStore = findByPropsLazy("hidePersonalInformation");
 
 const settings = definePluginSettings({
-    autoStreamProof: {
+    autoEnableWithStream: {
         type: OptionType.BOOLEAN,
-        description: "Automatically enable StreamProof when you start streaming",
+        description: "AutoEnable Withe Stream",
         default: false,
         onChange(value) {
             if (value && isStreaming()) {
@@ -64,7 +64,7 @@ function isStreaming(): boolean {
 }
 
 function handleStreamChange() {
-    if (!settings.store.autoStreamProof) return;
+    if (!settings.store.autoEnableWithStream) return;
 
     if (isStreaming()) {
         enableStreamProof();
@@ -201,7 +201,7 @@ export default definePlugin({
     },
 
     start() {
-        if (settings.store.autoStreamProof && isStreaming()) {
+        if (settings.store.autoEnableWithStream && isStreaming()) {
             enableStreamProof();
         }
     },

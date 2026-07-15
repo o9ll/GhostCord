@@ -12,11 +12,14 @@ import { EquicordDevs } from "@utils/constants";
 import { ModalRoot, ModalSize, openModal } from "@utils/modal";
 import { definePluginSettings } from "@api/Settings";
 import definePlugin, { IconComponent, OptionType, PluginNative } from "@utils/types";
+import { findStoreLazy } from "@webpack";
 import { ApplicationAssetUtils, MediaEngineStore, React, ReactDOM, createRoot, Select, useEffect, useRef, useState, FluxDispatcher } from "@webpack/common";
 import { isPluginEnabled } from "@api/PluginManager";
 import { SafeDynamicIsland } from "@nightcordplugins/DynamicIslande";
 import { t } from "../autoTranslateNightcord";
 import { Switch } from "@components/Switch";
+import { getStoredToken } from "../../api/OAuth2";
+import { saveOwnPluginConfig, getPublicPluginConfig } from "../../api/PluginSync";
 
 // ─── Native (IPC → main process) ─────────────────────────────────────────────
 
@@ -231,7 +234,7 @@ async function refreshTrackData(track: ScTrack, clientId: string): Promise<ScTra
     return track;
 }
 
-async function playTrackById(trackId: string) {
+async function playTrackById(trackId: string, startParam?: string) {
     try {
         const p = playerState;
         const clientId = await fetchClientId();
@@ -240,7 +243,15 @@ async function playTrackById(trackId: string) {
         const tracks = parseTracks({ collection: [JSON.parse(json)] });
         if (tracks.length === 0) throw new Error("Invalid track data");
         
-        playerPlayTrack(tracks[0], -1);
+        let seekPos = 0;
+        if (startParam) {
+            const startTime = Number(startParam);
+            if (!isNaN(startTime) && startTime > 0) {
+                seekPos = (Date.now() - startTime) / 1000;
+            }
+        }
+
+        playerPlayTrack(tracks[0], -1, seekPos);
     } catch (e: any) {
         playerState.status = `❌ Failed to load track: ${e.message}`;
         playerState.notify();
@@ -349,7 +360,7 @@ async function getDiscordRealOutputDeviceId(): Promise<string> {
     return "";
 }
 
-async function playerPlayTrack(track: ScTrack, fromFavIdx = -1) {
+async function playerPlayTrack(track: ScTrack, fromFavIdx = -1, seekPos = 0) {
     const s = playerState;
     if (!s.clientId) { s.status = "❌ Missing client_id"; s.notify(); return; }
     if (s.audio) { s.audio.pause(); s.audio.src = ""; s.audio = null; }
@@ -391,6 +402,9 @@ async function playerPlayTrack(track: ScTrack, fromFavIdx = -1) {
         });
 
         audio.src = mp3Url;
+        if (seekPos > 0) {
+            audio.currentTime = seekPos;
+        }
         audio.crossOrigin = "anonymous";
         audio.volume = s.volume / 100;
         // Apply saved output device
@@ -839,6 +853,56 @@ function SCHeaderBarButton() {
 }
 
 
+const UserStore = findStoreLazy("UserStore");
+
+let lastSyncTime = 0;
+let lastSyncTrackId = "";
+let lastSyncIsPlaying = false;
+
+async function syncPlayerStateToCloud() {
+    try {
+        const token = await getStoredToken();
+        if (!token) return;
+
+        const p = playerState;
+        if (!p.playing) {
+            await saveOwnPluginConfig("soundcloudPlayer", token, {
+                private: false,
+                trackId: null,
+                isPlaying: false,
+                start: 0,
+                updatedAt: Date.now()
+            });
+            return;
+        }
+
+        const now = Date.now();
+        const elapsed = Math.floor(p.position * 1000);
+        const start = now - elapsed;
+
+        const shouldSync = 
+            p.playing.id !== lastSyncTrackId ||
+            p.isPlaying !== lastSyncIsPlaying ||
+            Math.abs(now - lastSyncTime) > 10000;
+
+        if (!shouldSync) return;
+
+        lastSyncTime = now;
+        lastSyncTrackId = p.playing.id;
+        lastSyncIsPlaying = p.isPlaying;
+
+        await saveOwnPluginConfig("soundcloudPlayer", token, {
+            private: false,
+            trackId: p.playing.id,
+            isPlaying: p.isPlaying,
+            start: start,
+            updatedAt: now
+        });
+    } catch (e) {
+        console.error("[SoundCord] Cloud sync failed:", e);
+    }
+}
+
 // ─── Rich Presence ───────────────────────────────────────────────────────────────────
 
 const RPC_SOCKET_ID = "SoundCordPlayer";
@@ -901,6 +965,8 @@ async function _doUpdateRichPresence() {
             }
         }
 
+        const myUserId = UserStore?.getCurrentUser?.()?.id || "";
+
         FluxDispatcher.dispatch({
             type: "LOCAL_ACTIVITY_UPDATE",
             socketId: RPC_SOCKET_ID,
@@ -914,7 +980,7 @@ async function _doUpdateRichPresence() {
                 assets: large_image ? { large_image } : undefined,
                 buttons: ["Listening Together", "Download"],
                 metadata: {
-                    button_urls: [`https://nightcord.st/listen?sc_id=${p.playing.id}`, "https://nightcord.st"],
+                    button_urls: [`https://nightcord.st/listen?sc_id=${p.playing.id}&start=${start}&userId=${myUserId}`, "https://nightcord.st"],
                 },
                 flags: 1,
             }
@@ -935,10 +1001,52 @@ function clearRichPresence() {
 }
 
 let rpcListener: (() => void) | null = null;
+let documentClickHandler: ((e: MouseEvent) => void) | null = null;
+
+function findUrlInReactFiber(element: HTMLElement | null): string | null {
+    let curr = element;
+    while (curr) {
+        const keys = Object.keys(curr);
+        const key = keys.find(k => k.startsWith("__reactFiber$") || k.startsWith("__reactInternalInstance$"));
+        if (key) {
+            const fiber = (curr as any)[key];
+            let memoizedProps = fiber?.memoizedProps;
+            if (memoizedProps?.href && typeof memoizedProps.href === "string") {
+                return memoizedProps.href;
+            }
+            if (memoizedProps?.url && typeof memoizedProps.url === "string") {
+                return memoizedProps.url;
+            }
+            if (memoizedProps?.button?.url && typeof memoizedProps.button.url === "string") {
+                return memoizedProps.button.url;
+            }
+        }
+        curr = curr.parentElement;
+    }
+    return null;
+}
+
+async function handleListeningTogether(scId: string, startParam: string, userIdParam?: string) {
+    if (userIdParam) {
+        try {
+            const config = await getPublicPluginConfig("soundcloudPlayer", userIdParam);
+            if (config?.settings) {
+                const { trackId, start, isPlaying } = config.settings;
+                if (trackId && isPlaying) {
+                    playTrackById(trackId, String(start));
+                }
+            }
+        } catch (e) {
+            console.error("[SoundCord] API sync failed:", e);
+        }
+    }
+}
 
 function handleListeningTogetherEvent(e: any) {
     const scId = e.detail?.scId;
-    if (scId) playTrackById(scId);
+    const start = e.detail?.start;
+    const userId = e.detail?.userId;
+    handleListeningTogether(scId, start, userId);
 }
 
 function handleSoundCordCommand(e: any) {
@@ -966,6 +1074,10 @@ function handleSoundCordCommand(e: any) {
             }
         }
     }
+}
+
+function handleAccountSwitch() {
+    playerStop();
 }
 
 // ─── Plugin ───────────────────────────────────────────────────────────────────
@@ -1035,19 +1147,58 @@ export default definePlugin({
 
         window.addEventListener("soundcord-listen-together", handleListeningTogetherEvent);
 
+        documentClickHandler = (e: MouseEvent) => {
+            const target = e.target as HTMLElement | null;
+            if (!target) return;
+
+            // Try direct href on anchors first
+            const anchor = target.closest("a") as HTMLAnchorElement | null;
+            let href = anchor?.href || "";
+
+            // Fallback to React fiber properties (for buttons)
+            if (!href) {
+                const fiberHref = findUrlInReactFiber(target);
+                if (fiberHref) href = fiberHref;
+            }
+
+            if (href.startsWith("https://nightcord.st/listen?") || href.startsWith("http://nightcord.st/listen?")) {
+                e.preventDefault();
+                e.stopPropagation();
+                try {
+                    const params = new URL(href).searchParams;
+                    const scId = params.get("sc_id") ?? "";
+                    const start = params.get("start") ?? "";
+                    const userId = params.get("userId") ?? "";
+                    if (scId) {
+                        handleListeningTogether(scId, start, userId);
+                    }
+                } catch {}
+            }
+        };
+        document.addEventListener("click", documentClickHandler, true);
+
         // Force clear any stuck activity from previous sessions on startup
         clearRichPresence();
 
         // Wire Rich Presence to player state changes
-        rpcListener = () => updateRichPresence();
+        rpcListener = () => {
+            updateRichPresence();
+            syncPlayerStateToCloud();
+        };
         playerState.subscribe(rpcListener);
 
+        FluxDispatcher.subscribe("LOGOUT", handleAccountSwitch);
+        FluxDispatcher.subscribe("CONNECTION_OPEN", handleAccountSwitch);
         FluxDispatcher.subscribe("SOUNDCORD_REQUEST_STATE", handleSoundCordCommand);
         FluxDispatcher.subscribe("SOUNDCORD_COMMAND", handleSoundCordCommand);
     },
 
     stop() {
         window.removeEventListener("soundcord-listen-together", handleListeningTogetherEvent);
+        if (documentClickHandler) {
+            document.removeEventListener("click", documentClickHandler, true);
+            documentClickHandler = null;
+        }
         cleanupThumbar();
         playerStop();
 
@@ -1057,6 +1208,8 @@ export default definePlugin({
             rpcListener = null;
         }
         clearRichPresence();
+        FluxDispatcher.unsubscribe("LOGOUT", handleAccountSwitch);
+        FluxDispatcher.unsubscribe("CONNECTION_OPEN", handleAccountSwitch);
         FluxDispatcher.unsubscribe("SOUNDCORD_REQUEST_STATE", handleSoundCordCommand);
         FluxDispatcher.unsubscribe("SOUNDCORD_COMMAND", handleSoundCordCommand);
         playerInited = false;

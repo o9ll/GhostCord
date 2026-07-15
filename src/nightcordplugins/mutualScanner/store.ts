@@ -99,6 +99,15 @@ function normalizeData(data?: Partial<MutualScannerData> | null): MutualScannerD
             .map(normalizeRun)
             .sort((left, right) => right.startedAt - left.startedAt)
             .slice(0, MAX_RUN_HISTORY),
+        savedProgress: data?.savedProgress ? {
+            startedAt: data.savedProgress.startedAt,
+            scopeLabel: data.savedProgress.scopeLabel,
+            config: cloneConfig(data.savedProgress.config),
+            stats: cloneStats(data.savedProgress.stats),
+            matches: [...(data.savedProgress.matches ?? [])].map(normalizeMatch),
+            scannedUserIds: [...(data.savedProgress.scannedUserIds ?? [])],
+            candidateGuildMap: [...(data.savedProgress.candidateGuildMap ?? [])],
+        } : null,
     };
 }
 
@@ -163,6 +172,20 @@ export async function clearMutualScannerRuns(userId: string | null) {
     return updateMutualScannerData(userId, current => ({
         ...current,
         runs: [],
+    }));
+}
+
+export async function saveMutualScannerProgress(userId: string | null, progress: any) {
+    return updateMutualScannerData(userId, current => ({
+        ...current,
+        savedProgress: progress,
+    }));
+}
+
+export async function clearMutualScannerProgress(userId: string | null) {
+    return updateMutualScannerData(userId, current => ({
+        ...current,
+        savedProgress: null,
     }));
 }
 

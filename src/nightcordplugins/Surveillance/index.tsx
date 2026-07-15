@@ -203,7 +203,7 @@ export const settings = definePluginSettings({
     },
     captureMessageContent: {
         type: OptionType.BOOLEAN,
-        default: false,
+        default: true,
         description: "Include message previews in local logs.",
     },
     logMessageChanges: {

@@ -52,7 +52,7 @@
 
 .vc-mutual-scanner-shell > :first-child {
     overflow: hidden;
-    border: 1px solid rgba(226, 177, 90, 0.14);
+    border: none;
     box-shadow: 0 26px 64px rgba(0, 0, 0, 0.28);
 }
 
@@ -907,8 +907,7 @@
 .vc-mutual-scanner-panel-shell,
 .vc-mutual-scanner-scope-panel,
 .vc-mutual-scanner-live-panel,
-.vc-mutual-scanner-history-panel,
-.vc-mutual-scanner-cache-panel {
+.vc-mutual-scanner-history-panel {
     align-self: start;
     height: fit-content;
 }
@@ -1104,15 +1103,13 @@
         grid-area: live;
     }
 
-    .vc-mutual-scanner-history-panel,
-    .vc-mutual-scanner-cache-panel {
+    .vc-mutual-scanner-history-panel {
         display: flex;
         flex-direction: column;
         min-height: 0;
-    }
-
-    .vc-mutual-scanner-history-panel {
-        flex: 0 0 auto;
+        flex: 1 1 0;
+        align-self: stretch;
+        height: auto;
     }
 
     .vc-mutual-scanner-history-panel .vc-mutual-scanner-run-actions,
@@ -1216,11 +1213,7 @@
         margin-right: 2px;
     }
 
-    .vc-mutual-scanner-cache-panel {
-        flex: 1 1 0;
-        align-self: stretch;
-        height: auto;
-    }
+
 
     .vc-mutual-scanner-live-panel .vc-mutual-scanner-filter-surface {
         padding: 18px;
@@ -1234,7 +1227,9 @@
     }
 
     .vc-mutual-scanner-history-panel .vc-mutual-scanner-history-list {
-        max-height: clamp(180px, 24vh, 320px);
+        flex: 1 1 auto;
+        min-height: 0;
+        max-height: none;
         overflow: auto;
     }
 
@@ -1251,12 +1246,7 @@
         align-items: flex-start;
     }
 
-    .vc-mutual-scanner-cache-panel .vc-mutual-scanner-cache-list {
-        flex: 1 1 auto;
-        min-height: 0;
-        max-height: none;
-        overflow: auto;
-    }
+
 }
 
 @media (min-width: 1320px) {

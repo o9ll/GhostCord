@@ -16,6 +16,16 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
+/* Force the settings content column to take full width and reduce empty margins when viewing the Plugins tab */
+[class*="contentColumnDefault_"]:has(.vc-plugins-full-width-container),
+[class*="contentColumn_"]:has(.vc-plugins-full-width-container) {
+    max-width: 100% !important;
+    width: 100% !important;
+    padding-left: 20px !important;
+    padding-right: 20px !important;
+    padding-top: 20px !important;
+}
+
 .vc-plugins-full-width-container {
     width: 100%;
 }
@@ -65,7 +75,7 @@
     margin-top: 16px;
     display: grid;
     gap: 16px;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
 }
 
 .vc-plugins-ecosystem-banner {

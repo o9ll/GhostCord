@@ -56,9 +56,20 @@ export interface MutualScannerRun {
     error?: string;
 }
 
+export interface MutualScannerProgressState {
+    startedAt: number;
+    scopeLabel: string;
+    config: MutualScannerConfig;
+    stats: MutualScannerRunStats;
+    matches: MutualScannerMatch[];
+    scannedUserIds: string[];
+    candidateGuildMap: [string, string[]][];
+}
+
 export interface MutualScannerData {
     config: MutualScannerConfig;
     runs: MutualScannerRun[];
+    savedProgress?: MutualScannerProgressState | null;
 }
 
 export interface MutualScannerFriendOption {

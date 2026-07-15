@@ -37,6 +37,7 @@ import {
     useMutualScannerRuntimeState,
 } from "./runtime";
 import {
+    clearMutualScannerProgress,
     clearMutualScannerRuns,
     getMutualScannerCurrentUserId,
     removeMutualScannerRun,
@@ -1008,11 +1009,33 @@ function MutualScannerTab() {
         setTick(0);
         seenLiveMatchIdsRef.current = new Set();
 
-        const started = startMutualScannerRun(currentUserId, data.config);
+        const started = startMutualScannerRun(currentUserId, data.config, false);
         if (!started) {
             showToast("Mutual scan could not start.", Toasts.Type.FAILURE);
         }
     }, [clearScanStatusTimers, currentUserId, data.config]);
+
+    const resumeRun = React.useCallback(() => {
+        if (!currentUserId) return;
+
+        clearScanStatusTimers();
+        setLiveRuntimeMatches([]);
+        setRenderedRuntimeResult(null);
+        setTick(0);
+        seenLiveMatchIdsRef.current = new Set();
+
+        const started = startMutualScannerRun(currentUserId, data.config, true);
+        if (!started) {
+            showToast("Mutual scan could not resume.", Toasts.Type.FAILURE);
+        }
+    }, [clearScanStatusTimers, currentUserId, data.config]);
+
+    const discardProgress = React.useCallback(() => {
+        if (!currentUserId) return;
+        void clearMutualScannerProgress(currentUserId).then(() => {
+            showToast("Saved progress discarded.", Toasts.Type.SUCCESS);
+        });
+    }, [currentUserId]);
     const runDuration = React.useMemo(() => {
         if (!runStartedAt) return 0;
         return (runtimeResult?.finishedAt ?? Date.now()) - runStartedAt;
@@ -1288,15 +1311,34 @@ function MutualScannerTab() {
                                 <MagnifyingGlassIcon width={14} height={14} />
                                 <span>Start Scan</span>
                             </Button>
+                            {data.savedProgress && (
+                                <Button
+                                    variant="positive"
+                                    size="small"
+                                    className={cl("primary-action")}
+                                    disabled={isRunning || isManualWarmupRunning}
+                                    onClick={resumeRun}
+                                    style={{ marginLeft: 8 }}
+                                >
+                                    <RestartIcon width={14} height={14} />
+                                    <span>Resume Scan ({Math.round((data.savedProgress.scannedUserIds.length / data.savedProgress.candidateGuildMap.length) * 100)}%)</span>
+                                </Button>
+                            )}
                             <Button
                                 variant="dangerPrimary"
                                 size="small"
                                 disabled={!isRunning}
                                 onClick={cancelRun}
+                                style={{ marginLeft: 8 }}
                             >
                                 Cancel
                             </Button>
-                            <TextButton variant="danger" disabled={data.runs.length === 0 || isRunning} onClick={clearHistory}>
+                            {data.savedProgress && (
+                                <TextButton variant="danger" disabled={isRunning} onClick={discardProgress} style={{ marginLeft: 8 }}>
+                                    Discard Progress
+                                </TextButton>
+                            )}
+                            <TextButton variant="danger" disabled={data.runs.length === 0 || isRunning} onClick={clearHistory} style={{ marginLeft: "auto" }}>
                                 Clear History
                             </TextButton>
                         </div>
@@ -1435,55 +1477,6 @@ function MutualScannerTab() {
                                     run={run}
                                     comparison={runComparisons.get(run.id) ?? buildMutualScannerRunComparison(run, null)}
                                     onRemove={() => void removeMutualScannerRun(currentUserId, run.id)}
-                                />
-                            ))}
-                        </div>
-                    </Card>
-
-                    <Card className={cl("panel", "panel-shell", "cache-panel")} defaultPadding>
-                        <div className={cl("section-head")}>
-                            <div>
-                                <Heading className={cl("section-title")} tag="h4">Hydration Cache</Heading>
-                                <Paragraph className={cl("muted-copy")}>Temporary member-index snapshots reused by the shared hydration service.</Paragraph>
-                            </div>
-                            <div className={cl("section-actions")}>
-                                <span className={cl("section-chip")}>{hydrationSnapshots.length} cached</span>
-                                <TextButton
-                                    variant="secondary"
-                                    disabled={retryGuildIds.length === 0 || hydrationPending || isManualWarmupRunning || isRunning}
-                                    onClick={retryWeakGuilds}
-                                >
-                                    Retry Weak Guilds
-                                </TextButton>
-                                <TextButton variant="danger" disabled={hydrationSnapshots.length === 0 || hydrationPending} onClick={clearHydrationCache}>Clear All</TextButton>
-                            </div>
-                        </div>
-
-                        <div className={cl("history-list", "cache-list")}>
-                            {hydrationPending && (
-                                <>
-                                    <SkeletonCard compact />
-                                    <SkeletonCard compact />
-                                </>
-                            )}
-
-                            {!hydrationPending && hydrationSnapshots.length === 0 && (
-                                <Card className={cl("empty-card")} defaultPadding>
-                                    <CloudUploadIcon className={cl("empty-icon")} />
-                                    <HeadingTertiary>No hydration snapshots yet</HeadingTertiary>
-                                    <Paragraph className={cl("muted-copy")}>Run a warmup-enabled scan and the selected guilds will start building temporary local member indexes here.</Paragraph>
-                                </Card>
-                            )}
-
-                            {!hydrationPending && hydrationSnapshots.map(snapshot => (
-                                <HydrationCacheRow
-                                    key={`${snapshot.guildId}:${snapshot.warmedAt}`}
-                                    snapshot={snapshot}
-                                    quality={getHydrationSnapshotQuality(snapshot, guildTargetCountMap.get(snapshot.guildId) ?? null)}
-                                    targetCount={guildTargetCountMap.get(snapshot.guildId) ?? null}
-                                    onRewarm={() => rewarmGuild(snapshot.guildId)}
-                                    rewarmDisabled={isManualWarmupRunning || isRunning}
-                                    onClear={() => void clearHydrationCacheEntry(snapshot.guildId)}
                                 />
                             ))}
                         </div>

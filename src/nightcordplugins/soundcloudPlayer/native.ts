@@ -178,7 +178,9 @@ function _dispatchListenEvent(url: string) {
     try {
         const params = new URL(url).searchParams;
         const scId = params.get("sc_id") ?? "";
-        window.dispatchEvent(new CustomEvent("soundcord-listen-together", { detail: { scId } }));
+        const start = params.get("start") ?? "";
+        const userId = params.get("userId") ?? "";
+        window.dispatchEvent(new CustomEvent("soundcord-listen-together", { detail: { scId, start, userId } }));
     } catch { }
 }
 
@@ -198,8 +200,34 @@ export function installListeningTogetherIntercept(_?: any): void {
     _listenerInstalled = true;
 
     if (IS_ELECTRON && _BrowserWindow) {
-        // Electron mode: hook BrowserWindow navigation events
         const electron = require("electron") as typeof import("electron");
+
+        // Override shell.openExternal to catch profile button link clicks
+        const originalOpenExternal = electron.shell.openExternal;
+        electron.shell.openExternal = (url: string, options?: any) => {
+            if (typeof url === "string" && url.startsWith(LISTEN_URL_PREFIX)) {
+                try {
+                    const params = new URL(url).searchParams;
+                    const scId = params.get("sc_id") ?? "";
+                    const start = params.get("start") ?? "";
+                    const userId = params.get("userId") ?? "";
+                    electron.BrowserWindow.getAllWindows().forEach(w => {
+                        try {
+                            const safeId = JSON.stringify(scId);
+                            const safeStart = JSON.stringify(start);
+                            const safeUserId = JSON.stringify(userId);
+                            w.webContents.executeJavaScript(
+                                `window.dispatchEvent(new CustomEvent('soundcord-listen-together', { detail: { scId: ${safeId}, start: ${safeStart}, userId: ${safeUserId} } }))`
+                            ).catch(() => {});
+                        } catch { }
+                    });
+                } catch { }
+                return Promise.resolve();
+            }
+            return originalOpenExternal.call(electron.shell, url, options);
+        };
+
+        // Electron mode: hook BrowserWindow navigation events
         const hook = (win: Electron.BrowserWindow) => {
             win.webContents.on("will-navigate" as any, (event: any, url: string) => {
                 if (!url.startsWith(LISTEN_URL_PREFIX)) return;
@@ -207,11 +235,15 @@ export function installListeningTogetherIntercept(_?: any): void {
                 try {
                     const params = new URL(url).searchParams;
                     const scId = params.get("sc_id") ?? "";
+                    const start = params.get("start") ?? "";
+                    const userId = params.get("userId") ?? "";
                     _BrowserWindow!.getAllWindows().forEach(w => {
                         try {
                             const safeId = JSON.stringify(scId);
+                            const safeStart = JSON.stringify(start);
+                            const safeUserId = JSON.stringify(userId);
                             w.webContents.executeJavaScript(
-                                `window.dispatchEvent(new CustomEvent('soundcord-listen-together', { detail: { scId: ${safeId} } }))`
+                                `window.dispatchEvent(new CustomEvent('soundcord-listen-together', { detail: { scId: ${safeId}, start: ${safeStart}, userId: ${safeUserId} } }))`
                             ).catch(() => {});
                         } catch { }
                     });
@@ -223,11 +255,15 @@ export function installListeningTogetherIntercept(_?: any): void {
                 try {
                     const params = new URL(url).searchParams;
                     const scId = params.get("sc_id") ?? "";
+                    const start = params.get("start") ?? "";
+                    const userId = params.get("userId") ?? "";
                     _BrowserWindow!.getAllWindows().forEach(w => {
                         try {
                             const safeId = JSON.stringify(scId);
+                            const safeStart = JSON.stringify(start);
+                            const safeUserId = JSON.stringify(userId);
                             w.webContents.executeJavaScript(
-                                `window.dispatchEvent(new CustomEvent('soundcord-listen-together', { detail: { scId: ${safeId} } }))`
+                                `window.dispatchEvent(new CustomEvent('soundcord-listen-together', { detail: { scId: ${safeId}, start: ${safeStart}, userId: ${safeUserId} } }))`
                             ).catch(() => {});
                         } catch { }
                     });
