@@ -726,7 +726,7 @@ const GhostUserAreaButton: UserAreaButtonFactory = ({ iconForeground, hideToolti
     return (
         <div ref={btnRef} style={{ position: "relative" }}>
             <UserAreaButton
-                tooltipText={hideTooltips ? undefined : "Ghost Accounts — left click: toggle | right click: config"}
+                tooltipText={hideTooltips ? undefined : "Ghost"}
                 icon={<GhostIcon className={`${iconForeground} ${anyActive ? "gc-icon--active" : ""}`} />}
                 plated={nameplate != null}
                 redGlow={false}

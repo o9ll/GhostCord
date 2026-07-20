@@ -1,8 +1,8 @@
 @echo off
-:: ─── Ghostcord — Publier une nouvelle release sur GitHub ─────────────────────
-:: Usage : publish-release.bat 1.18.1 "Description des changements"
-:: Necessite : gh (GitHub CLI) — https://cli.github.com
-::             pnpm, node, dotnet SDK (ou .NET Framework 4.x)
+:: ─── Ghostcord — Publish a new release to GitHub ──────────────────────────────
+:: Usage: publish-release.bat 1.18.1 "Release description"
+:: Requires: gh (GitHub CLI) — https://cli.github.com
+::           pnpm, node, dotnet SDK (or .NET Framework 4.x)
 
 setlocal EnableDelayedExpansion
 
@@ -10,15 +10,15 @@ set "VERSION=%~1"
 set "NOTES=%~2"
 
 if "%VERSION%"=="" (
-    echo [ERREUR] Usage: publish-release.bat VERSION "Notes de version"
-    echo Exemple : publish-release.bat 1.18.1 "Correction bug audio"
+    echo [ERROR] Usage: publish-release.bat VERSION "Release notes"
+    echo Example: publish-release.bat 1.18.1 "Fixed audio bug"
     pause
     exit /b 1
 )
 
 if "%NOTES%"=="" set NOTES=Ghostcord %VERSION%
 
-:: Chemins de sortie
+:: Output paths
 set DIST_DIR=dist\desktop
 set OUT_DIR=release\installer
 set DIST_ZIP=%OUT_DIR%\ghostcord-dist.zip
@@ -28,39 +28,39 @@ set DESKTOP_ASAR=dist\desktop.asar
 
 echo.
 echo  ╔═══════════════════════════════════════════════════╗
-echo  ║    GHOSTCORD — Publication release v%VERSION%
+echo  ║    GHOSTCORD — Publishing release v%VERSION%
 echo  ╚═══════════════════════════════════════════════════╝
 echo.
 
-:: ── 1. Mise à jour des versions dans les fichiers ─────────────────────────────
-echo  [1/8] Mise a jour de la version vers %VERSION%...
+:: ── 1. Update version numbers in files ─────────────────────────────────────────
+echo  [1/8] Updating version to %VERSION%...
 
 powershell -NoProfile -Command "$c = Get-Content -Raw 'package.json'; $c = $c -replace '\"version\": \"[^\"]+\"', '\"version\": \"%VERSION%\"'; [IO.File]::WriteAllText((Resolve-Path 'package.json').Path, $c)"
 
-echo  [1/8] Version mise a jour.
+echo  [1/8] Version updated.
 
-:: ── 2. Envoi du code source sur GitHub ────────────────────────────────────────
+:: ── 2. Push source code to GitHub ──────────────────────────────────────────────
 echo.
-echo  [2/8] Committer et pusher le code source...
+echo  [2/8] Committing and pushing source code...
 git add .
 git diff --quiet --cached
 if errorlevel 1 (
     git commit -m "build: release v%VERSION% - !NOTES!"
 ) else (
-    echo  Aucun changement a committer.
+    echo  No changes to commit.
 )
 git push --set-upstream origin master
 if errorlevel 1 (
-    echo  [ERREUR] Impossible de push sur GitHub. Verifiez vos identifiants/droits d'acces.
+    echo  [ERROR] Unable to push to GitHub. Check your credentials/access rights.
     pause
     exit /b 1
 )
-echo  [2/8] Code source synchronise avec GitHub.
+echo  [2/8] Source code synchronized with GitHub.
 
-:: ── 3. Build JS (avec obfuscation automatique) ────────────────────────────────
+:: ── 3. Build JS (with automatic obfuscation) ───────────────────────────────────
 echo.
-echo  [3/8] Build + obfuscation en cours...
-echo        (Les fichiers JS seront obfusques automatiquement)
+echo  [3/8] Building + obfuscating...
+echo        (JavaScript files will be obfuscated automatically)
 
 taskkill /F /IM Discord.exe /T >nul 2>&1
 taskkill /F /IM node.exe    /T >nul 2>&1
@@ -68,79 +68,79 @@ timeout /t 2 /nobreak >nul
 
 call pnpm build
 if errorlevel 1 (
-    echo  [ERREUR] pnpm build a echoue.
+    echo  [ERROR] pnpm build failed.
     pause
     exit /b 1
 )
-echo  [3/8] Build + obfuscation termines !
+echo  [3/8] Build + obfuscation completed!
 
-:: ── 4. Preparer les assets supplementaires ──────────────────────────────────
+:: ── 4. Prepare additional assets ───────────────────────────────────────────────
 echo.
-echo  [4/8] Copie des assets (ffmpeg, node, modules...) vers %DIST_DIR%...
+echo  [4/8] Copying assets (ffmpeg, node, modules...) to %DIST_DIR%...
 
 node scripts\build\collect-assets.mjs
 
-echo  [4/8] Assets copies.
+echo  [4/8] Assets copied.
 
-:: ── 5. Compiler Ghostcord-Installer.exe ──────────────────────────────────────
+:: ── 5. Compile Ghostcord-Installer.exe ─────────────────────────────────────────
 echo.
-echo  [5/8] Compilation de Ghostcord-Installer.exe...
+echo  [5/8] Compiling Ghostcord-Installer.exe...
 
 if not exist "%OUT_DIR%" mkdir "%OUT_DIR%"
 
 powershell -NoProfile -ExecutionPolicy Bypass -File "build-installer.ps1"
 if errorlevel 1 (
-    echo  [ERREUR] Compilation de l'installeur echouee.
+    echo  [ERROR] Installer compilation failed.
     pause
     exit /b 1
 )
 
 if not exist "%INSTALLER_EXE%" (
-    echo  [ERREUR] Ghostcord-Installer.exe introuvable apres compilation.
+    echo  [ERROR] Ghostcord-Installer.exe not found after compilation.
     pause
     exit /b 1
 )
 
-for %%F in ("%INSTALLER_EXE%") do echo  [5/8] Ghostcord-Installer.exe cree (%%~zF octets)
+for %%F in ("%INSTALLER_EXE%") do echo  [5/8] Ghostcord-Installer.exe created (%%~zF bytes)
 
-:: ── 6. Créer ghostcord-dist.zip ──────────────────────────────────────────────
+:: ── 6. Create ghostcord-dist.zip ───────────────────────────────────────────────
 echo.
-echo  [6/8] Creation de ghostcord-dist.zip...
+echo  [6/8] Creating ghostcord-dist.zip...
 
 if not exist "%DIST_DIR%\patcher.js" (
-    echo  [ERREUR] dist\desktop\patcher.js introuvable.
+    echo  [ERROR] dist\desktop\patcher.js not found.
     pause
     exit /b 1
 )
 
 if exist "%DIST_ZIP%" del /F /Q "%DIST_ZIP%"
 
-:: Nettoyer les fichiers inutiles avant compression
+:: Remove unnecessary files before compression
 del /s /q "%DIST_DIR%\*.map" >nul 2>&1
 del /s /q "%DIST_DIR%\*.LEGAL.txt" >nul 2>&1
 
-:: Verifier que @babel est present avant de zipper
+:: Verify that @babel is present before creating the ZIP
 node scripts\build\verify-dist.mjs
 if errorlevel 1 (
-    echo  [ERREUR] Verification du dist echouee - @babel manquant ou incomplet.
+    echo  [ERROR] Dist verification failed - @babel is missing or incomplete.
     pause
     exit /b 1
 )
 
-:: Compresser avec .NET ZipFile directement (plus fiable que Compress-Archive pour node_modules)
+:: Compress directly using .NET ZipFile (more reliable than Compress-Archive for node_modules)
 powershell -NoProfile -Command "Add-Type -Assembly System.IO.Compression.FileSystem; $src = (Resolve-Path '%DIST_DIR%').Path; $dst = (Join-Path (Resolve-Path 'release\installer').Path 'ghostcord-dist.zip'); [System.IO.Compression.ZipFile]::CreateFromDirectory($src, $dst, [System.IO.Compression.CompressionLevel]::Optimal, $false)"
 
 if not exist "%DIST_ZIP%" (
-    echo  [ERREUR] Impossible de creer ghostcord-dist.zip
+    echo  [ERROR] Unable to create ghostcord-dist.zip
     pause
     exit /b 1
 )
 
-for %%F in ("%DIST_ZIP%") do echo  [6/8] ghostcord-dist.zip cree (%%~zF octets)
+for %%F in ("%DIST_ZIP%") do echo  [6/8] ghostcord-dist.zip created (%%~zF bytes)
 
-:: ── 7. Mettre à jour version.json ─────────────────────────────────────────────
+:: ── 7. Update version.json ─────────────────────────────────────────────────────
 echo.
-echo  [7/8] Mise a jour de version.json...
+echo  [7/8] Updating version.json...
 
 for /f "usebackq" %%d in (`powershell -NoProfile -Command "Get-Date -Format 'yyyy-MM-dd'"`) do set ISO_DATE=%%d
 
@@ -155,15 +155,15 @@ for /f "usebackq" %%d in (`powershell -NoProfile -Command "Get-Date -Format 'yyy
     echo }
 ) > "%VERSION_JSON%"
 
-echo  [7/8] version.json mis a jour.
+echo  [7/8] version.json updated.
 
-:: ── 8. Publier sur GitHub Releases ────────────────────────────────────────────
+:: ── 8. Publish to GitHub Releases ──────────────────────────────────────────────
 echo.
-echo  [8/8] Publication de la release v%VERSION% sur GitHub...
+echo  [8/8] Publishing release v%VERSION% to GitHub...
 
 where gh >nul 2>&1
 if errorlevel 1 (
-    echo  [ERREUR] GitHub CLI non installe — https://cli.github.com
+    echo  [ERROR] GitHub CLI is not installed — https://cli.github.com
     pause
     exit /b 1
 )
@@ -179,7 +179,7 @@ gh release create "v%VERSION%" ^
     --latest
 
 if errorlevel 1 (
-    echo  [ERREUR] Echec de la publication GitHub.
+    echo  [ERROR] GitHub publication failed.
     pause
     exit /b 1
 )
@@ -187,16 +187,16 @@ if errorlevel 1 (
 :: ── Done ───────────────────────────────────────────────────────────────────────
 echo.
 echo  ╔═══════════════════════════════════════════════════════════════╗
-echo  ║  Ghostcord v%VERSION% publie avec succes !
+echo  ║  Ghostcord v%VERSION% published successfully!
 echo  ║
-echo  ║  Fichiers publies sur GitHub :
-echo  ║    Ghostcord-Installer.exe    — installeur .exe avec GUI
-echo  ║    ghostcord-dist.zip         — JS obfusques (pour l'injec.)
-echo  ║    version.json               — metadonnees de version
+echo  ║  Files published to GitHub:
+echo  ║    Ghostcord-Installer.exe    — GUI installer
+echo  ║    ghostcord-dist.zip         — Obfuscated JS (for injection)
+echo  ║    version.json               — Version metadata
 echo  ║
-echo  ║  Les utilisateurs telechargeront Ghostcord-Installer.exe
-echo  ║  et le lanceront pour choisir leur Discord cible.
-echo  ║  Aucun code source visible — tout est obfusque.
+echo  ║  Users will download Ghostcord-Installer.exe
+echo  ║  and run it to choose their target Discord installation.
+echo  ║  No visible source code — everything is obfuscated.
 echo  ╚═══════════════════════════════════════════════════════════════╝
 echo.
 pause
