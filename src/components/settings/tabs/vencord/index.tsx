@@ -31,7 +31,6 @@ import { openModal } from "@utils/modal";
 import { relaunch } from "@utils/native";
 import { Avatar, OAuth2AuthorizeModal, React, Select, UserStore } from "@webpack/common";
 
-import { MELLOWTEL_ONBOARDING_VERSION } from "@components/MellowtelConsentModal";
 
 import { ContributeModal } from "../../../../ghostcord/renderer/components/ContributeModal";
 import { openNotificationSettingsModal } from "./NotificationSettings";
@@ -208,31 +207,6 @@ function StealthModeButton() {
 }
 
 
-
-function MellowtelSupportSwitch() {
-    const [consent, setConsentState] = React.useState<{ consent: "accepted" | "declined"; version: string; } | null>(
-        () => VencordNative.mellowtel.getConsent()
-    );
-
-    return (
-        <FormSwitch
-            value={consent?.consent === "accepted"}
-            onChange={accepted => {
-                const version = consent?.version ?? MELLOWTEL_ONBOARDING_VERSION;
-                VencordNative.mellowtel.setConsent(accepted, version);
-                setConsentState({ consent: accepted ? "accepted" : "declined", version });
-            }}
-            title={t("Share bandwidth to support Ghostcord (Mellowtel)")}
-            description={
-                consent
-                    ? undefined
-                    : t("You haven't been asked yet - this will opt you in immediately if enabled here.")
-            }
-            hideBorder
-        />
-    );
-}
-
 function EquicordSettings() {
     const settings = useSettings();
     const stealthActive = useStealthActive();
@@ -386,11 +360,7 @@ function EquicordSettings() {
                             hideBorder
                         />
                     ),
-                )}
-
-                <MellowtelSupportSwitch />
-
-                {needsVibrancySettings && (
+                )}{needsVibrancySettings && (
                     <>
                         <Divider className={Margins.top20} />
 

@@ -92,7 +92,6 @@ export { PlainSettings, Settings };
 
 import { coreStyleRootNode, initStyles } from "@api/Styles";
 import { openSettingsTabModal, UpdaterTab } from "@components/settings";
-import { openMellowtelOnboardingModal, shouldShowMellowtelOnboarding } from "@components/MellowtelConsentModal";
 import { debounce } from "@shared/debounce";
 import { IS_WINDOWS } from "@utils/constants";
 import { createAndAppendStyle } from "@utils/css";
@@ -239,7 +238,7 @@ function showGreenUpdateBanner() {
     let countdownTimer: ReturnType<typeof setInterval> | null = null;
 
     function setStatus(text: string) { statusSpan.textContent = text; }
-    setStatus(`Auto-installing in ${countdown}s... (or click to install now)`);
+    setStatus(`Closing in ${countdown}s... (click Install Now to update)`);
 
     async function doInstall() {
         if (installing) return;
@@ -267,15 +266,16 @@ function showGreenUpdateBanner() {
         }
     }
 
-    // Auto-install after 10s
+    // Auto-dismiss after 10s if user doesn't click Install
     countdownTimer = setInterval(() => {
         countdown--;
         if (countdown <= 0) {
             clearInterval(countdownTimer!);
             countdownTimer = null;
-            doInstall();
+            banner.remove();
+            UpdateLogger.info("Update banner auto-dismissed — update will apply on next restart.");
         } else {
-            setStatus(`Auto-installing in ${countdown}s... (or click to install now)`);
+            setStatus(`Closing in ${countdown}s... (click Install Now to update)`);
         }
     }, 1_000);
 
@@ -323,7 +323,7 @@ function showGreenUpdateBanner() {
     closeBtn.onmouseenter = () => closeBtn.style.color = "#dbdee1";
     closeBtn.onmouseleave = () => closeBtn.style.color = "#b5bac1";
     closeBtn.textContent = "✕";
-    closeBtn.title = "Dismiss (will auto-install when Discord closes)";
+    closeBtn.title = "Dismiss";
     closeBtn.addEventListener("click", () => {
         if (installing) return; // do not close if installing
         if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; }
@@ -400,13 +400,6 @@ async function init() {
 
     syncSettings();
     initTrayIpc();
-
-    // Mandatory, one-time (per onboarding version) consent screen for the Mellowtel
-    // bandwidth-sharing SDK. It re-appears after major updates by bumping
-    // MELLOWTEL_ONBOARDING_VERSION.
-    if (shouldShowMellowtelOnboarding()) {
-        setTimeout(() => openMellowtelOnboardingModal(), 1500);
-    }
 
     if (!IS_WEB && !IS_UPDATER_DISABLED) {
         runUpdateCheck();

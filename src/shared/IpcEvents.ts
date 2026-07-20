@@ -76,10 +76,6 @@ export const enum IpcEvents {
     // Relaunch de l'app Electron
     RELAUNCH_APP = "GhostcordRelaunchApp",
 
-    // Mellowtel bandwidth-sharing SDK consent (user-facing, opt-in onboarding)
-    MELLOWTEL_SET_CONSENT = "GhostcordMellowtelSetConsent",
-    MELLOWTEL_GET_CONSENT = "GhostcordMellowtelGetConsent",
-
     // WorldBomb - Simulation Clavier/Souris Native
     WORLD_BOMB_TYPE = "WorldBombType",
     WORLD_BOMB_PRESS_ENTER = "WorldBombPressEnter",
