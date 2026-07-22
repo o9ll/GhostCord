@@ -8,30 +8,34 @@ import { addMessagePopoverButton as addButton, removeMessagePopoverButton as rem
 import { definePluginSettings } from "@api/Settings";
 import definePlugin, { OptionType } from "@utils/types";
 import { findByPropsLazy } from "@webpack";
-import { ChannelStore, Constants, RestAPI, UserStore } from "@webpack/common";
-import { tPlugin as t } from "@api/pluginI18n";
+import { ChannelStore, Constants, MessageStore, RestAPI, UserStore } from "@webpack/common";
 
 const MessageActions = findByPropsLazy("deleteMessage", "startEditMessage");
 
 const settings = definePluginSettings({
     deleteOriginalMessage: {
         type: OptionType.BOOLEAN,
-        description: t("Delete the original server-side message after silent edit. If disabled, the original message will reappear after client reload."),
+        description: "Delete the original server-side message after silent edit. If disabled, the original message will reappear after client reload.",
         default: true
     },
     deleteDelay: {
         type: OptionType.NUMBER,
-        description: t("Delay (in milliseconds) before deleting the original message if enabled."),
+        description: "Delay (in milliseconds) before deleting the original message if enabled.",
         default: 500
     },
     suppressNotifications: {
         type: OptionType.BOOLEAN,
-        description: t("Recommended for use in DMs to prevent pinging users."),
+        description: "Recommended for use in DMs to prevent pinging users.",
+        default: false
+    },
+    interceptAllEdits: {
+        type: OptionType.BOOLEAN,
+        description: "Silently edit every message you edit through Discord's normal edit flows, including shortcuts like Up Arrow.",
         default: false
     },
     accentColor: {
         type: OptionType.STRING,
-        description: t("Accent color for the Silent Edit icon (hex code)."),
+        description: "Accent color for the Silent Edit icon (hex code).",
         default: "#ed4245"
     }
 });
@@ -73,6 +77,32 @@ function deleteMessage(channelId: string, messageId: string) {
     });
 }
 
+async function silentEditMessage(channelId: string, messageId: string, content: string, messageReference?: any) {
+    let sentReplacement = false;
+
+    try {
+        await sendMessage(
+            content,
+            messageId,
+            channelId,
+            settings.store.suppressNotifications,
+            messageReference
+        );
+        sentReplacement = true;
+
+        await sleep(settings.store.deleteDelay);
+
+        if (settings.store.deleteOriginalMessage) {
+            await deleteMessage(channelId, messageId);
+        }
+
+        return true;
+    } catch (error) {
+        console.error("[SilentEdit] Error:", error);
+        return sentReplacement;
+    }
+}
+
 export default definePlugin({
     name: "SilentEdit",
     description: "\"Silently\" edit a message without showing the edit tag and bypass Vencord's message logger.",
@@ -80,6 +110,17 @@ export default definePlugin({
     dependencies: ["MessagePopoverAPI"],
     settings,
     enabledByDefault: true,
+
+    async onBeforeMessageEdit(channelId, messageId, messageObj) {
+        if (!settings.store.interceptAllEdits || messageObj.content.length === 0) return;
+
+        const msg = MessageStore.getMessage(channelId, messageId);
+        if (!msg || msg.author.id !== UserStore.getCurrentUser().id) return;
+
+        if (await silentEditMessage(channelId, messageId, messageObj.content, msg.messageReference)) {
+            return { cancel: true };
+        }
+    },
 
     start() {
         addButton("SilentEdit", msg => {
@@ -90,35 +131,19 @@ export default definePlugin({
 
                 const originalEditMessage = MessageActions.editMessage;
 
-                MessageActions.editMessage = async function (channelId: string, messageId: string, content: any) {
+                MessageActions.editMessage = async function(channelId: string, messageId: string, content: any) {
                     MessageActions.editMessage = originalEditMessage;
 
                     if (messageId !== msg.id) {
                         return originalEditMessage.apply(this, arguments);
                     }
 
-                    try {
-                        await sendMessage(
-                            content.content,
-                            msg.id,
-                            channelId,
-                            settings.store.suppressNotifications,
-                            msg.messageReference
-                        );
-
-                        await sleep(settings.store.deleteDelay);
-
-                        if (settings.store.deleteOriginalMessage) {
-                            await deleteMessage(channelId, messageId);
-                        }
-                    } catch (error) {
-                        console.error("[SilentEdit] Error:", error);
-                    }
+                    await silentEditMessage(channelId, messageId, content.content, msg.messageReference);
                 };
             };
 
             return {
-                label: t("Silent Edit"),
+                label: "Silent Edit",
                 icon: SilentEditIcon,
                 message: msg,
                 channel: ChannelStore.getChannel(msg.channel_id),

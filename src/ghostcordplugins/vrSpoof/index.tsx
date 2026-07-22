@@ -8,8 +8,7 @@ import definePlugin from "@utils/types";
 
 export default definePlugin({
   name: "VRSpoof",
-  description:
-    "Makes your Discord session report as a VR client, so the VR headset indicator shows on your avatar and in voice channels.",
+  description: "Makes your Discord session report as a VR client, so the VR headset indicator shows on your avatar and in voice channels.",
   authors: [{ name: "Aurick", id: 1348025017233047634n }],
 
   patches: [
