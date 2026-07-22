@@ -64,7 +64,6 @@ export default definePlugin({
     description: "Adds a tooltip with a message preview when hovering over message links, replies, and forwarded messages.",
     tags: ["Appearance", "Chat"],
     authors: [Devs.Kyuuhachi],
-    enabledByDefault: true,
 
     settings,
 

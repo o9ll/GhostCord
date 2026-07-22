@@ -6,6 +6,9 @@
 
 import { showNotice } from "@api/Notices";
 import { isPluginEnabled, pluginRequiresRestart, startDependenciesRecursive, startPlugin, stopPlugin } from "@api/PluginManager";
+import { fetchPluginRatings, togglePluginLike, PluginLikeData } from "@api/PluginLikes";
+import { LIKE_AUTH_EVENT } from "@api/PluginLikesAuth";
+import { getStoredToken } from "@api/OAuth2";
 import { CogWheel, InfoIcon } from "@components/Icons";
 import { AddonCard } from "@components/settings/AddonCard";
 import { classNameFactory } from "@utils/css";
@@ -40,6 +43,42 @@ interface PluginCardProps extends React.HTMLProps<HTMLDivElement> {
 export function PluginCard({ plugin, disabled, onRestartNeeded, onMouseEnter, onMouseLeave, isNew, hasTutorial }: PluginCardProps) {
     const settings = Settings.plugins[plugin.name];
     const isEnabled = () => isPluginEnabled(plugin.name);
+
+    const [likeData, setLikeData] = React.useState<PluginLikeData | null>(null);
+    const [likeLoading, setLikeLoading] = React.useState(false);
+    const [isLoggedIn, setIsLoggedIn] = React.useState(false);
+
+    React.useEffect(() => {
+        let cancelled = false;
+        const load = async () => {
+            const token = await getStoredToken();
+            if (cancelled) return;
+            setIsLoggedIn(!!token);
+            const ratings = await fetchPluginRatings();
+            if (cancelled) return;
+            setLikeData(ratings[plugin.name] ?? { likes: 0, likedByMe: false });
+        };
+        load();
+        window.addEventListener(LIKE_AUTH_EVENT, load);
+        return () => {
+            cancelled = true;
+            window.removeEventListener(LIKE_AUTH_EVENT, load);
+        };
+    }, [plugin.name]);
+
+    async function handleLike(e: React.MouseEvent) {
+        e.stopPropagation();
+        if (!isLoggedIn || likeLoading) return;
+        setLikeLoading(true);
+        // Optimistic update
+        setLikeData(prev => prev ? {
+            likes: prev.likedByMe ? prev.likes - 1 : prev.likes + 1,
+            likedByMe: !prev.likedByMe,
+        } : null);
+        const result = await togglePluginLike(plugin.name);
+        if (result) setLikeData(result);
+        setLikeLoading(false);
+    }
 
     function doToggleEnabled() {
         const wasEnabled = isEnabled();
@@ -199,8 +238,45 @@ export function PluginCard({ plugin, disabled, onRestartNeeded, onMouseEnter, on
         </Tooltip>
     );
 
+    const likeTooltip = !isLoggedIn ? t("Sign in to like plugins") : likeData?.likedByMe ? t("Unlike") : t("Like");
+    const canLike = isLoggedIn && !likeLoading;
+
+    const likeBadge = (
+        <Tooltip text={likeTooltip}>
+            {({ onMouseEnter, onMouseLeave }) => (
+                <button
+                    className={[
+                        "nc-badge-btn",
+                        likeData?.likedByMe && "nc-badge-liked",
+                        !isLoggedIn && "nc-badge-btn-disabled",
+                    ].filter(Boolean).join(" ")}
+                    onClick={e => { if (canLike) handleLike(e); else e.stopPropagation(); }}
+                    aria-disabled={!canLike}
+                    onMouseEnter={onMouseEnter}
+                    onMouseLeave={onMouseLeave}
+                >
+                    {likeData?.likedByMe ? (
+                        <svg aria-hidden="true" role="img" xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24">
+                            <path fill="currentColor" d="M12.47 21.73a.92.92 0 0 1-.94 0C9.43 20.48 1 15.09 1 8.75A5.75 5.75 0 0 1 6.75 3c2.34 0 3.88.9 5.25 2.26A6.98 6.98 0 0 1 17.25 3 5.75 5.75 0 0 1 23 8.75c0 6.34-8.42 11.73-10.53 12.98Z" />
+                        </svg>
+                    ) : (
+                        <svg aria-hidden="true" role="img" xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24">
+                            <path fill="currentColor" fillRule="evenodd" d="M12 8.07 10.6 6.7A5 5 0 0 0 6.75 5 3.75 3.75 0 0 0 3 8.75c0 2.32 1.59 4.76 3.87 6.96A31.87 31.87 0 0 0 12 19.67c1.2-.74 3.26-2.14 5.13-3.96 2.28-2.2 3.87-4.64 3.87-6.96A3.75 3.75 0 0 0 17.25 5a5 5 0 0 0-3.85 1.69L12 8.07Zm0-2.8A6.98 6.98 0 0 0 6.75 3 5.75 5.75 0 0 0 1 8.75c0 6.34 8.42 11.73 10.53 12.98.29.17.65.17.94 0C14.57 20.48 23 15.09 23 8.75A5.75 5.75 0 0 0 17.25 3c-2.34 0-3.88.9-5.25 2.26Z" clipRule="evenodd" />
+                        </svg>
+                    )}
+                </button>
+            )}
+        </Tooltip>
+    );
+
     const isGhostcord = !PluginMeta[plugin.name]?.userPlugin;
     const iconType = isGhostcord ? "ghostcord" : "other";
+
+    // Like system only applies to Ghostcord plugins (not Vencord/Equicord,
+    // not User Plugins), and never to required plugins (including those shown as
+    // required because an active dependency needs them, hence the `disabled` check).
+    const isGhostcordFolderPlugin = PluginMeta[plugin.name]?.folderName?.startsWith("src/ghostcordplugins/") ?? false;
+    const canShowLikeBadge = isGhostcordFolderPlugin && !plugin.required && !disabled;
 
     function openCreditsModal() {
         openModal(props => (
@@ -244,7 +320,7 @@ export function PluginCard({ plugin, disabled, onRestartNeeded, onMouseEnter, on
             name={plugin.name}
             iconType={iconType}
             customIcon={PluginIcon}
-            sourceBadge={<>{hasTutorial && sourceBadge}</>}
+            sourceBadge={<>{hasTutorial && sourceBadge}{canShowLikeBadge && likeBadge}</>}
             description={tPlugin(plugin.description)}
             isNew={isNew}
             enabled={isEnabled()}

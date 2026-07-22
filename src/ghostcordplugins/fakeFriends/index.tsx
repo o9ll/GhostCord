@@ -28,7 +28,7 @@ const FAKE_DM_PHRASES = [
     "hey don't you have discord?", "hello!", "hi :)", "yo", "good morning!",
     "hey, do we know each other?", "what are you playing right now?", "are you active?",
     "hey what's your server?", "hi, can we talk?", "hello",
-    "yo", "hey you!", "did you see the last thing on the server?",
+    "wsh", "hey you!", "did you see the last thing on the server?",
     "i hadn't seen you there!", "good evening!", "want to play together?",
     "hey are you free?", "gg on the server!", "hi i have a question",
     "yo are you there?", "hello, new here", "hey :)", "wsh bro",
@@ -461,7 +461,7 @@ function askCount(title: string, max: number): Promise<number | null> {
                     <Modals.ModalContent style={{ padding: "16px 20px" }}>
                         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                             <label style={{ fontSize: 12, fontWeight: 600, color: "#fff", textTransform: "uppercase", letterSpacing: ".04em" }}>
-                                Number (max {max})
+                                Nombre (max {max})
                             </label>
                             <input
                                 autoFocus
@@ -741,7 +741,8 @@ async function sendIncomingMessageRequest(user: any) {
             id: channelId, type: 1, flags: 0,
             guild_id: null, guildId: null,
             lastMessageId: msgId, lastPinTimestamp: null,
-            name: "", icon: null, ownerId: null, applicationId: null,
+            name: "",
+     icon: null, ownerId: null, applicationId: null,
             recipients: [user.id], recipientIDs: [user.id],
             rawRecipients: [makeUserPayload(user)],
             nicks: {},
@@ -881,7 +882,8 @@ export default definePlugin({
     name: "FakeFriends",
     enabledByDefault: true,
     description: "Locally simulates Discord friends and requests. Persistent between reloads.",
-    authors: [{ name: "Ghostcord", id: 0n }],
+    authors: [{ name: "Ghostcord",
+     id: 0n }],
     dependencies: ["ContextMenuAPI"],
 
     async start() {

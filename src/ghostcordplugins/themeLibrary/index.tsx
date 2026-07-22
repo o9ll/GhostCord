@@ -15,9 +15,9 @@ import { settings } from "./utils/settings";
 
 export default definePlugin({
     name: "ThemeLibrary",
+    enabledByDefault: true,
     description: "A library of themes for Vencord.",
     authors: [EquicordDevs.Fafa],
-    enabledByDefault: true,
     required: true,
     settings,
     toolboxActions: {

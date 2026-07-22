@@ -7,7 +7,19 @@
 import { addContextMenuPatch, NavContextMenuPatchCallback, removeContextMenuPatch } from "@api/ContextMenu";
 import { ModalCloseButton, ModalContent, ModalFooter, ModalHeader, ModalRoot, openModal } from "@utils/modal";
 import definePlugin, { OptionType } from "@utils/types";
-import { Button, GuildChannelStore, GuildMemberStore, GuildRoleStore, GuildStore, Menu, React, Select, TextArea, SelectedGuildStore, UserStore, FluxDispatcher, VoiceStateStore, showToast } from "@webpack/common";
+import { Button, GuildChannelStore, GuildMemberStore, GuildRoleStore, GuildStore, Menu, React, Select, TextArea, SelectedGuildStore, UserStore, FluxDispatcher, VoiceStateStore, showToast, PermissionsBits } from "@webpack/common";
+import { findStoreLazy } from "@webpack";
+
+const PermissionStore = findStoreLazy("PermissionStore") as any;
+
+let cachedAllPermissions: bigint | null = null;
+function getAllPermissions() {
+    if (cachedAllPermissions !== null) return cachedAllPermissions;
+    cachedAllPermissions = Object.values(PermissionsBits ?? {}).reduce((acc: bigint, v) => {
+        try { return acc | BigInt(v as any); } catch { return acc; }
+    }, 0n);
+    return cachedAllPermissions;
+}
 
 let isEnabled = false;
 
@@ -475,9 +487,9 @@ const userContextPatch: NavContextMenuPatchCallback = (children, { user }: any) 
 
 export default definePlugin({
     name: "FakePerm",
-    enabledByDefault: false,
     description: "Visually simulates moderation options in the right-click menu. No real action.",
-    authors: [{ name: "Ghostcord", id: 0n }],
+    authors: [{ name: "Ghostcord",
+     id: 0n }],
     dependencies: ["ContextMenuAPI"],
     requiresRestart: false,
 
@@ -526,6 +538,49 @@ export default definePlugin({
         }
     ],
 
+    // ─── Runtime PermissionStore override ────────────────────────────────────
+    // Monkey-patch PermissionStore methods at runtime when the plugin starts
+    // so Discord's UI thinks the user has every permission (ADMINISTRATOR level).
+    // This is pure client-side visual — the server always enforces real perms.
+    _origCan: null as ((...a: any[]) => any) | null,
+    _origGetChannelPerms: null as ((...a: any[]) => any) | null,
+    _origGetGuildPerms: null as ((...a: any[]) => any) | null,
+    _origCanManageUser: null as ((...a: any[]) => any) | null,
+
+    _patchPermissionStore() {
+        if (!PermissionStore) return;
+
+        // can(permission, channel) → always true
+        if (!this._origCan && typeof PermissionStore.can === "function") {
+            this._origCan = PermissionStore.can.bind(PermissionStore);
+            PermissionStore.can = (...args: any[]) => isEnabled ? true : this._origCan!(...args);
+        }
+        // getChannelPermissions(channel) → all perms
+        if (!this._origGetChannelPerms && typeof PermissionStore.getChannelPermissions === "function") {
+            this._origGetChannelPerms = PermissionStore.getChannelPermissions.bind(PermissionStore);
+            PermissionStore.getChannelPermissions = (...args: any[]) =>
+                isEnabled ? getAllPermissions() : this._origGetChannelPerms!(...args);
+        }
+        // getGuildPermissions({ id }) → all perms
+        if (!this._origGetGuildPerms && typeof PermissionStore.getGuildPermissions === "function") {
+            this._origGetGuildPerms = PermissionStore.getGuildPermissions.bind(PermissionStore);
+            PermissionStore.getGuildPermissions = (...args: any[]) =>
+                isEnabled ? getAllPermissions() : this._origGetGuildPerms!(...args);
+        }
+        // canManageUser(permission, author, guild) → always true
+        if (!this._origCanManageUser && typeof PermissionStore.canManageUser === "function") {
+            this._origCanManageUser = PermissionStore.canManageUser.bind(PermissionStore);
+            PermissionStore.canManageUser = (...args: any[]) => isEnabled ? true : this._origCanManageUser!(...args);
+        }
+    },
+
+    _unpatchPermissionStore() {
+        if (this._origCan) { PermissionStore.can = this._origCan; this._origCan = null; }
+        if (this._origGetChannelPerms) { PermissionStore.getChannelPermissions = this._origGetChannelPerms; this._origGetChannelPerms = null; }
+        if (this._origGetGuildPerms) { PermissionStore.getGuildPermissions = this._origGetGuildPerms; this._origGetGuildPerms = null; }
+        if (this._origCanManageUser) { PermissionStore.canManageUser = this._origCanManageUser; this._origCanManageUser = null; }
+    },
+
     getHighestRole({ member }: { member: any; }, roles: any[]): any | undefined {
         try {
             return roles.find(role => role.id === member.highestRoleId);
@@ -537,7 +592,7 @@ export default definePlugin({
     options: {
         enabled: {
             type: OptionType.BOOLEAN,
-            description: "Enable fake permissions in right-click menu",
+            description: "Enable fake permissions (admin UI) — visual only, server still checks real perms",
             default: false,
             onChange(v: boolean) {
                 isEnabled = Boolean(v);
@@ -557,7 +612,7 @@ export default definePlugin({
                     deletedMessages.clear();
                     notifyBadgeChange();
                 }
-                toast(isEnabled ? "FakePerm enabled ✓" : "FakePerm disabled ✓");
+                toast(isEnabled ? "FakePerm enabled ✓ (Admin UI active)" : "FakePerm disabled ✓");
             }
         }
     },
@@ -600,6 +655,9 @@ export default definePlugin({
         addContextMenuPatch("user-context", userContextPatch);
         addContextMenuPatch("message", messageContextPatch);
 
+        // Monkey-patch PermissionStore for real-time permission faking
+        this._patchPermissionStore();
+
         const style = document.createElement("style");
         style.id = "fakeperm-roles-style";
         style.textContent = "[class*='submenu']::-webkit-scrollbar{display:none!important}[class*='submenu']{scrollbar-width:none!important} .fp-footer-fix { display: flex; gap: 8px; padding: 16px; }";
@@ -621,6 +679,8 @@ export default definePlugin({
         removeContextMenuPatch("user-context", userContextPatch);
         removeContextMenuPatch("message", messageContextPatch);
         isEnabled = false;
+        // Restore original PermissionStore methods
+        this._unpatchPermissionStore();
         document.getElementById("fakeperm-roles-style")?.remove();
         document.querySelectorAll("[id^='fp-ibadge-']").forEach(el => el.remove());
         document.querySelectorAll("[data-fp-hidden='true']").forEach(el => {

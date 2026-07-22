@@ -49,13 +49,13 @@ export const settings = definePluginSettings({
 
 export default definePlugin({
     name: "ServerInfo",
+    enabledByDefault: true,
     description: "Allows you to view info about a server",
     tags: ["Servers", "Utility"],
     authors: [Devs.Ven, Devs.Nuckyz, EquicordDevs.Z1xus],
     dependencies: ["DynamicImageModalAPI"],
     searchTerms: ["guild", "info", "ServerProfile"],
     isModified: true,
-    enabledByDefault: true,
     contextMenus: {
         "guild-context": Patch,
         "guild-header-popout": Patch

@@ -17,9 +17,10 @@ const TrophyIcon = (props: any) => (
 
 export default definePlugin({
     name: "WordBomb",
-    description: "BombParty/WordBomb assistant with persistent overlay, integrated AI and alphabet track.",
-    authors: [{ name: "Ghostcord", id: 0n }],
     enabledByDefault: true,
+    description: "BombParty/WordBomb assistant with persistent overlay, integrated AI and alphabet track.",
+    authors: [{ name: "Ghostcord",
+     id: 0n }],
     dependencies: ["HeaderBarAPI"],
 
     headerBarButton: {

@@ -4,9 +4,9 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-import { Button, Flex, Heading, Paragraph } from "@Ghostcord/types/components";
-import { ModalContent, ModalFooter, ModalHeader, ModalRoot } from "@Ghostcord/types/utils";
-import { React } from "@Ghostcord/types/webpack/common";
+import { Button, Flex, Heading, Paragraph } from "@components";
+import { ModalContent, ModalFooter, ModalHeader, ModalRoot } from "@utils/modal";
+import { React } from "@webpack/common";
 
 type ModalProps = { transitionState: any; onClose(): void; };
 
@@ -105,10 +105,9 @@ export function SecurityModal(props: ModalProps) {
             </ModalContent>
             <ModalFooter style={{ justifyContent: "flex-end" }}>
                 <Button
-                    color={canClose ? Button.Colors.BRAND : Button.Colors.PRIMARY}
+                    variant={canClose ? "primary" : "secondary"}
                     disabled={!canClose}
                     onClick={onClose}
-                    look={Button.Looks.FILLED}
                     style={{ minWidth: "110px" }}
                 >
                     {canClose ? "OK" : `OK (${timeLeft}s)`}

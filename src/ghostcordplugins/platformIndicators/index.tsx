@@ -162,7 +162,7 @@ const settings = definePluginSettings({
     list: {
         type: OptionType.BOOLEAN,
         description: "Show indicators in the member list",
-        default: true,
+        default: false,
     },
     profiles: {
         type: OptionType.BOOLEAN,
@@ -172,7 +172,7 @@ const settings = definePluginSettings({
     messages: {
         type: OptionType.BOOLEAN,
         description: "Show indicators inside messages",
-        default: true,
+        default: false,
     },
     colorMobileIndicator: {
         type: OptionType.BOOLEAN,
@@ -199,7 +199,6 @@ const settings = definePluginSettings({
 
 export default definePlugin({
     name: "PlatformIndicators",
-    enabledByDefault: false,
     description: "Adds platform indicators (Desktop, Mobile, Web...) to users",
     authors: [Devs.kemo, Devs.TheSun, Devs.Nuckyz, Devs.Ven, EquicordDevs.neoarz],
     isModified: true,

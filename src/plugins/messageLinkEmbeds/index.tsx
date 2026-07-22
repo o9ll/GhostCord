@@ -367,7 +367,6 @@ export default definePlugin({
     tags: ["Chat", "Appearance"],
     authors: [Devs.TheSun, Devs.Ven, Devs.RyanCaoDev],
     dependencies: ["MessageAccessoriesAPI", "MessageUpdaterAPI", "UserSettingsAPI"],
-    enabledByDefault: true,
 
     settings,
 

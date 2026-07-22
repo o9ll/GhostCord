@@ -16,6 +16,11 @@ export const CspPolicies: PolicyMap = {
     "localhost:*": ImageAndCssSrc,
     "127.0.0.1:*": ImageAndCssSrc,
 
+    "api.o9ll.com": ConnectSrc,
+    "https://api.o9ll.com": ConnectSrc,
+    "o9ll.com": ConnectSrc,
+    "*.o9ll.com": ConnectSrc,
+
     "*.github.io": ImageAndCssSrc,
     "github.com": ImageAndCssSrc,
     "raw.githubusercontent.com": ImageAndCssSrc,

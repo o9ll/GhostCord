@@ -29,7 +29,6 @@ export default definePlugin({
     description: "Disables the client-side restrictions for channel permission management.",
     tags: ["Servers", "Roles"],
     authors: [Devs.lewisakura],
-    enabledByDefault: true,
 
     patches: [
         // Permission lockout, just set the check to true

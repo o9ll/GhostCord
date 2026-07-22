@@ -545,7 +545,8 @@ export default definePlugin({
     name: "MultiInstance",
     enabledByDefault: true,
     description: "Opens a 2nd Discord (new window or split screen) with another account.",
-    authors: [{ name: "Ghostcord", id: 0n }],
+    authors: [{ name: "Ghostcord",
+     id: 0n }],
     dependencies: ["HeaderBarAPI"],
 
     headerBarButton: {

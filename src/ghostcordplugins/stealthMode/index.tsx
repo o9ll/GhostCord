@@ -19,7 +19,8 @@ export default definePlugin({
     name: "StealthMode",
     enabledByDefault: true,
     description: "Hides all plugin buttons without disabling them. Shortcut: Ctrl+Shift+H. The toggle is in Ghostcord Settings.",
-    authors: [{ name: "Ghostcord", id: 0n }],
+    authors: [{ name: "Ghostcord",
+     id: 0n }],
     required: true,
     managedStyle: style,
 

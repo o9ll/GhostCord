@@ -1,7 +1,7 @@
 {
     "name": "ghostcord",
     "private": "true",
-    "version": "1.21.4",
+    "version": "1.21.8",
     "description": "Everything Discord doesn't build, we create",
     "main": "dist/js/main.js",
     "homepage": "https://github.com/o9ll/ghostcord",
@@ -99,6 +99,7 @@
         "html-minifier-terser": "^7.2.0",
         "javascript-obfuscator": "^5.4.1",
         "minimatch": "^10.2.4",
+        "mellowtel": "^1.6.7",
         "moment": "^2.22.2",
         "puppeteer-core": "^24.30.0",
         "rcedit": "^5.0.2",

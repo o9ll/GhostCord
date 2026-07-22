@@ -83,7 +83,6 @@ export default definePlugin({
     description: "Makes the message context menu in message search results have all options you'd expect",
     tags: ["Utility"],
     authors: [Devs.Ven, Devs.Aria],
-    enabledByDefault: true,
 
     patches: [{
         find: "onClick:this.handleMessageClick,",

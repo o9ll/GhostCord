@@ -20,7 +20,7 @@ const StreamerModeStore = findByPropsLazy("hidePersonalInformation");
 const settings = definePluginSettings({
     autoEnableWithStream: {
         type: OptionType.BOOLEAN,
-        description: "AutoEnable Withe Stream",
+        description: "AutoEnable With Stream",
         default: false,
         onChange(value) {
             if (value && isStreaming()) {
@@ -180,10 +180,10 @@ const StreamProofButton: ChatBarButtonFactory = ({ isMainChat }) => {
 
 export default definePlugin({
     name: "StreamProof",
+    enabledByDefault: true,
     description: "Hides messages, links, images, DMs, but not the screen share/voice grid. Toggle via chat bar button.",
     authors: [EquicordDevs.TheArmagan],
     dependencies: ["ChatInputButtonAPI"],
-    enabledByDefault: true,
     settings,
 
     chatBarButton: {

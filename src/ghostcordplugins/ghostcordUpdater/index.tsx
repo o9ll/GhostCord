@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
+import { Settings } from "@api/Settings";
 import definePlugin from "@utils/types";
 import { waitFor } from "@webpack";
 import { React, useEffect, useState } from "@webpack/common";
@@ -43,6 +44,7 @@ function notify() { listeners.forEach(f => f()); }
 
 // Check on startup - delayed 15s to not block Discord
 async function checkForUpdates() {
+    if (Settings.disableAutoUpdate) return;
     try {
         const localVersion = getLocalVersion();
         const data = await new Promise<any>((resolve, reject) => {
@@ -226,11 +228,18 @@ function unmountBanner() {
 
 export default definePlugin({
     name: "GhostcordUpdater",
-    enabledByDefault: false,
+    enabledByDefault: true,
+    required: true,
     description: "Shows a banner when a new Ghostcord version is available. Click Update to install.",
-    authors: [{ name: "Ghostcord", id: 0n }],
+    authors: [{ name: "Ghostcord",
+     id: 0n }],
 
     start() {
+        const mountWhenReady = () => setTimeout(mountBanner, 1500);
+        if (document.readyState === "complete") mountWhenReady();
+        else window.addEventListener("load", mountWhenReady, { once: true });
+
+        setTimeout(() => checkForUpdates(), 15000);
     },
 
     stop() {

@@ -26,7 +26,6 @@ export default definePlugin({
     description: "Do not hide messages from 'likely spammers'",
     tags: ["Utility", "Chat"],
     authors: [Devs.botato, Devs.Nyako],
-    enabledByDefault: true,
     patches: [
         {
             find: "hasFlag:{writable",

@@ -546,7 +546,8 @@ export default definePlugin({
     name: "SharePerms",
     enabledByDefault: true,
     description: "Multi-user permission sharing with interactive UI.",
-    authors: [{ name: "Ghostcord", id: 0n }],
+    authors: [{ name: "Ghostcord",
+     id: 0n }],
     settings,
 
     headerBarButton: {

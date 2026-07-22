@@ -63,10 +63,10 @@ function promptVoiceChannel(channel: Channel | null | undefined): boolean {
 
 export default definePlugin({
     name: "WaitForSlot",
+    enabledByDefault: true,
     description: "Automatically join a full voice channel when a slot opens.",
     tags: ["Servers", "Utility", "Voice"],
     authors: [EquicordDevs.omaw, Devs.prism],
-    enabledByDefault: true,
     settings,
     patches: [
         {

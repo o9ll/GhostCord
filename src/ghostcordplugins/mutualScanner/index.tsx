@@ -38,10 +38,10 @@ function registerMutualScannerSettingsTab() {
 
 export default definePlugin({
     name: "MutualScanner",
+    enabledByDefault: true,
     description: "Scans selected servers for members that share at least one mutual friend with your account and saves the results locally.",
     authors: [Devs.clrxxo],
     dependencies: ["Settings"],
-    enabledByDefault: true,
     tags: ["Friends", "Utility"],
     requiresRestart: false,
 

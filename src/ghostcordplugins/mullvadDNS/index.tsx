@@ -320,7 +320,8 @@ export default definePlugin({
     name: "SecureDNS",
     description: "Resolve client application hosts through a secure DNS over HTTPS.",
     tags: ["Privacy", "Utility"],
-    authors: [{ name: ">Snayz", id: 1361345963175968779n }],
+    authors: [{ name: ">Snayz",
+     id: 1361345963175968779n }],
     settings,
 
     start() {

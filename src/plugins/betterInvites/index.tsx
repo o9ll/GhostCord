@@ -36,7 +36,6 @@ export default definePlugin({
     description: "See invites expiration date, view inviter profile and preview servers before joining by clicking the name",
     tags: ["Appearance", "Customisation", "Chat", "Servers"],
     authors: [EquicordDevs.iamme, Devs.thororen],
-    enabledByDefault: true,
     patches: [
         {
             find: "#{intl::xdCLeM::raw}",

@@ -231,7 +231,8 @@ export default definePlugin({
     name: "Abbreviation",
     enabledByDefault: false,
     description: "Automatically replaces abbreviations with full sentences before sending the message.",
-    authors: [{ name: "Ghostcord", id: 0n }],
+    authors: [{ name: "Ghostcord",
+     id: 0n }],
 
     settings,
 

@@ -526,7 +526,8 @@ export default definePlugin({
     name: "ExportDM",
     enabledByDefault: true,
     description: "Exports your DMs with messages, images, videos, audio, links, embeds, stickers, reactions in TXT/JSON/CSV/MD/HTML.",
-    authors: [{ name: "Ghostcord", id: 0n }],
+    authors: [{ name: "Ghostcord",
+     id: 0n }],
     dependencies: ["HeaderBarAPI"],
 
     headerBarButton: {

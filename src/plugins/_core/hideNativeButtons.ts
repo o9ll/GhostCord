@@ -15,10 +15,10 @@ const CSS = `
 [aria-label="Help"],
 [aria-label="Aide"],
 [aria-label="DevTools"],
-[aria-label="Boîte de réception"],
-[aria-label="Boite de réception"],
+[aria-label="Last Meadow Online"],
 [aria-label="Inbox"],
-[aria-label="Last Meadow Online"] {
+[aria-label="Boîte de réception"],
+[aria-label="Bandeja de entrada"] {
     display: none !important;
     width: 0 !important;
     min-width: 0 !important;

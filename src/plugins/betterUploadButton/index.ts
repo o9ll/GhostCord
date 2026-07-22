@@ -24,7 +24,6 @@ export default definePlugin({
     authors: [Devs.fawn, Devs.Ven],
     description: "Upload with a single click, open menu with right click",
     tags: ["Utility", "Shortcuts"],
-    enabledByDefault: true,
     patches: [
         {
             find: ".CHAT_INPUT_BUTTON_NOTIFICATION,",

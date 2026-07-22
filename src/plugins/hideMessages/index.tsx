@@ -99,7 +99,6 @@ export default definePlugin({
     dependencies: ["MessagePopoverAPI"],
     tags: ["Chat", "Utility"],
     authors: [EquicordDevs.yash],
-    enabledByDefault: true,
     patches: [
         {
             find: '"dm-quick-launcher"===',

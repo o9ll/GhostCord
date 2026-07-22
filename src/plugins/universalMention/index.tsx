@@ -40,7 +40,6 @@ export default definePlugin({
     authors: [EquicordDevs.justjxke],
     description: "Mention any user, regardless of channel access.",
     tags: ["Chat", "Servers", "Utility"],
-    enabledByDefault: true,
     settings,
     settingsAboutComponent: () => (
         <Notice.Warning>

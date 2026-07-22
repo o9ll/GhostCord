@@ -27,7 +27,6 @@ export default definePlugin({
     description: 'Replaces "Minified React Error" with the actual error.',
     tags: ["Developers"],
     authors: [Devs.Cyn, Devs.maisymoe],
-    enabledByDefault: true,
     patches: [
         {
             find: "React has blocked a javascript: URL as a security precaution.",

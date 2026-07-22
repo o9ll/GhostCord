@@ -53,7 +53,6 @@ export default definePlugin({
     dependencies: ["MessageEventsAPI"],
     tags: ["Privacy", "Utility"],
     authors: [Devs.adryd, Devs.thororen],
-    enabledByDefault: true,
 
     rules: [] as RuleSet[],
 

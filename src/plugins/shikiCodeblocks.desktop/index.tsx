@@ -35,7 +35,6 @@ export default definePlugin({
     description: "Brings vscode-style codeblocks into Discord, powered by Shiki",
     tags: ["Appearance", "Chat", "Customisation"],
     authors: [Devs.Vap],
-    enabledByDefault: true,
     reporterTestable: ReporterTestable.Patches,
     settings,
 

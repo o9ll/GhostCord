@@ -161,7 +161,8 @@ async function deriveAESKey(password: string, salt: Uint8Array, iterations: numb
             hash: "SHA-256"
         },
         keyMaterial,
-        { name: "AES-GCM", length: 256 },
+        { name: "AES-GCM",
+     length: 256 },
         false,
         usages
     );
@@ -265,7 +266,8 @@ async function decryptAES(encrypted: string, password: string): Promise<string> 
     const encryptedData = data.slice(offset);
     const key = await deriveAESKey(password, salt, iterations, ["decrypt"]);
     const decrypted = await crypto.subtle.decrypt(
-        { name: "AES-GCM", iv: toArrayBuffer(iv), additionalData },
+        { name: "AES-GCM",
+     iv: toArrayBuffer(iv), additionalData },
         key,
         toArrayBuffer(encryptedData)
     );
@@ -799,7 +801,8 @@ export default definePlugin({
     name: "EncryptedMessage",
     enabledByDefault: true,
     description: "AES-256 end-to-end encryption for Discord. Share the same password with other users to communicate securely.",
-    authors: [{ name: "Ghostcord", id: 0n }],
+    authors: [{ name: "Ghostcord",
+     id: 0n }],
     dependencies: ["ChatInputButtonAPI", "MessageEventsAPI", "MessageAccessoriesAPI"],
     settings,
 

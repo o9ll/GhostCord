@@ -73,10 +73,10 @@ const settings = definePluginSettings({
 
 export default definePlugin({
     name: "FastDeleteChannels",
+    enabledByDefault: true,
     description: "Adds a trash icon to delete channels",
     tags: ["Servers", "Utility"],
     authors: [Devs.thororen],
-    enabledByDefault: true,
     settings,
     patches: [
         // TY TypingIndicator

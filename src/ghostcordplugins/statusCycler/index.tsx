@@ -857,7 +857,8 @@ const settings = definePluginSettings({
 export default definePlugin({
     name: "StatusCycler",
     description: "Automatically rotates through custom status phrases and emojis at a configurable interval.",
-    authors: [{ name: "irritably", id: 928787166916640838n }],
+    authors: [{ name: "irritably",
+     id: 928787166916640838n }],
     tags: ["Activity", "Utility"],
     dependencies: ["UserSettingsAPI"],
     settings,

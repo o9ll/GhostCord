@@ -117,18 +117,18 @@ export function shouldIgnore({ channelId, authorId, guildId, flags, bot, ghostPi
 
     const ids = [authorId, channelId, guildId];
 
-    const whitelistedIds = settings.store.whitelistedIds.split(",");
+    const whitelistedIds = (settings.store.whitelistedIds || "").split(",").filter(Boolean);
 
-    const isWhitelisted = settings.store.whitelistedIds.split(",").some(e => ids.includes(e));
+    const isWhitelisted = whitelistedIds.some(e => ids.includes(e));
     const isAuthorWhitelisted = whitelistedIds.includes(authorId!);
     const isChannelWhitelisted = whitelistedIds.includes(channelId!);
     const isGuildWhitelisted = whitelistedIds.includes(guildId!);
 
     const blacklistedIds = [
-        ...settings.store.blacklistedIds.split(","),
-        ...(ignoreUsers ?? []).split(","),
-        ...(ignoreChannels ?? []).split(","),
-        ...(ignoreGuilds ?? []).split(",")
+        ...(settings.store.blacklistedIds || "").split(",").filter(Boolean),
+        ...(typeof ignoreUsers === "string" ? ignoreUsers.split(",").filter(Boolean) : []),
+        ...(typeof ignoreChannels === "string" ? ignoreChannels.split(",").filter(Boolean) : []),
+        ...(typeof ignoreGuilds === "string" ? ignoreGuilds.split(",").filter(Boolean) : [])
     ];
 
     const isBlacklisted = blacklistedIds.some(e => ids.includes(e));

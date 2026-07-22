@@ -137,7 +137,6 @@ export default definePlugin({
     description: "A plugin to jump to last active message from yourself or another user in a channel/server.",
     tags: ["Chat", "Utility"],
     authors: [EquicordDevs.Crxa],
-    enabledByDefault: true,
     contextMenus: {
         "channel-context": ChannelContextMenuPatch,
         "user-context": UserContextMenuPatch,

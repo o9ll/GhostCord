@@ -27,7 +27,6 @@ export default definePlugin({
     description: "If a forward fails send it as a normal message also allows nsfw forwards",
     tags: ["Chat", "Utility"],
     authors: [Devs.thororen],
-    enabledByDefault: true,
     settings,
     patches: [
         {

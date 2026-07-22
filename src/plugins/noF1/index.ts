@@ -24,7 +24,6 @@ export default definePlugin({
     description: "Disables F1 help bind.",
     tags: ["Utility"],
     authors: [Devs.Cyn],
-    enabledByDefault: true,
     patches: [
         {
             find: ',"f1"],comboKeysBindGlobal:',

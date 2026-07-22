@@ -221,7 +221,8 @@ export default definePlugin({
     name: "SelfDestruct",
     enabledByDefault: true,
     description: "Sends messages that are automatically deleted after a configurable delay. Red timer visible on each message.",
-    authors: [{ name: "Ghostcord", id: 0n }],
+    authors: [{ name: "Ghostcord",
+     id: 0n }],
     dependencies: ["ChatInputButtonAPI", "MessageAccessoriesAPI"],
     settings,
 

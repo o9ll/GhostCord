@@ -106,15 +106,50 @@ async function getUser(id: string) {
     return userObj;
 }
 
-function MentionWrapper({ data, UserMention, RoleMention, parse, props }: MentionProps) {
-    const [userId, setUserId] = useState(data.userId);
+/**
+ * Extracts the Discord user ID from the mention data object.
+ * Tries data.userId first, then falls back to scanning data.content for a raw <@id> token.
+ * This is more reliable than parsing the rendered React children.
+ */
+function extractMentionUserId(data: MentionProps["data"]): string | null {
+    // data.userId is the most reliable source when set by Discord's parser
+    if (data.userId) return data.userId;
 
-    // if userId is set it means the user is cached. Uncached users have userId set to undefined
-    if (userId)
+    // Fallback: scan data.content (can be a string, array of strings, or nested arrays)
+    const scan = (val: any): string | null => {
+        if (typeof val === "string") {
+            return val.match(/<@!?(\d+)>/)?.[1] ?? null;
+        }
+        if (Array.isArray(val)) {
+            for (const item of val) {
+                const found = scan(item);
+                if (found) return found;
+            }
+        }
+        if (val && typeof val === "object") {
+            // Discord content tokens can have a .content property
+            return scan(val.content ?? null);
+        }
+        return null;
+    };
+
+    return scan(data.content);
+}
+
+function MentionWrapper({ data, UserMention, RoleMention, parse, props }: MentionProps) {
+    // Extract the user ID upfront at render time — never rely on parsed children
+    const resolvedId = extractMentionUserId(data);
+
+    // A mention is "ready" when we have the ID AND the user is in the store
+    const [isReady, setIsReady] = useState(() =>
+        resolvedId != null && UserStore.getUser(resolvedId) != null
+    );
+
+    if (isReady && resolvedId)
         return (
             <UserMention
                 className="mention"
-                userId={userId}
+                userId={resolvedId}
                 channelId={data.channelId}
                 inlinePreview={props.noStyleAndInteraction}
                 props={props}
@@ -125,6 +160,37 @@ function MentionWrapper({ data, UserMention, RoleMention, parse, props }: Mentio
     // Parses the raw text node array data.content into a ReactNode[]: ["<@userid>"]
     const children = parse(data.content, props);
 
+    function tryFetch() {
+        if (!resolvedId) return;
+        if (fetching.has(resolvedId)) return;
+
+        // User was cached since last render — just mark ready
+        if (UserStore.getUser(resolvedId)) {
+            setIsReady(true);
+            return;
+        }
+
+        const fetch = () => {
+            fetching.add(resolvedId);
+            queue.unshift(() =>
+                getUser(resolvedId)
+                    .then(() => {
+                        setIsReady(true);
+                        fetching.delete(resolvedId);
+                    })
+                    .catch(e => {
+                        fetching.delete(resolvedId);
+                        if (e?.status === 429) {
+                            queue.unshift(() => sleep(e?.body?.retry_after ?? 1000).then(fetch));
+                        }
+                    })
+                    .finally(() => sleep(300))
+            );
+        };
+
+        fetch();
+    }
+
     return (
         // Discord is deranged and renders unknown user mentions as role mentions
         <RoleMention
@@ -132,42 +198,7 @@ function MentionWrapper({ data, UserMention, RoleMention, parse, props }: Mentio
             props={props}
             inlinePreview={props.formatInline}
         >
-            <span
-                onMouseEnter={() => {
-                    const mention = children?.[0]?.props?.children;
-                    if (typeof mention !== "string") return;
-
-                    const id = mention.match(/<@!?(\d+)>/)?.[1];
-                    if (!id) return;
-
-                    if (fetching.has(id))
-                        return;
-
-                    if (UserStore.getUser(id))
-                        return setUserId(id);
-
-                    const fetch = () => {
-                        fetching.add(id);
-
-                        queue.unshift(() =>
-                            getUser(id)
-                                .then(() => {
-                                    setUserId(id);
-                                    fetching.delete(id);
-                                })
-                                .catch(e => {
-                                    if (e?.status === 429) {
-                                        queue.unshift(() => sleep(e?.body?.retry_after ?? 1000).then(fetch));
-                                        fetching.delete(id);
-                                    }
-                                })
-                                .finally(() => sleep(300))
-                        );
-                    };
-
-                    fetch();
-                }}
-            >
+            <span onMouseEnter={tryFetch}>
                 {children}
             </span>
         </RoleMention>

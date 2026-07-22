@@ -111,10 +111,11 @@ function renderTooltipText(date: Date) {
 
 export default definePlugin({
     name: "RealtimeTimestamps",
-    description: "Replaces Discord timestamps (e.g. 15:31) with live seconds (e.g. 15:34:21), updated every second.",
-    tags: ["Appearance", "Chat", "Utility"],
-    authors: [{ name: "Ghostcord", id: 253979869n }],
     enabledByDefault: true,
+    description: "Replaces Discord timestamps (e.g. 15:31) with live seconds (e.g. 15:34:21), updated every second.",
+    authors: [{ name: "Ghostcord",
+     id: 0n }],
+    tags: ["Appearance", "Chat", "Utility"],
     settings,
 
     // Called directly by patches — must return a plain string, not a React

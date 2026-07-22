@@ -82,10 +82,9 @@ async function downloadAll(attachments: MessageAttachment[]) {
 export default definePlugin({
     name: "DownloadAllAttachments",
     description: "Adds a popover button to download all attachments in a message at once.",
+    authors: [EquicordDevs.thororen],
     tags: ["Utility", "Chat"],
-    authors: [EquicordDevs.dhopcs],
     dependencies: ["MessagePopoverAPI"],
-    enabledByDefault: true,
     messagePopoverButton: {
         icon: CloudDownloadIcon,
         render(message: Message) {

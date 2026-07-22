@@ -17,9 +17,8 @@ let updateFunc = (v: any) => { };
 export default definePlugin({
     name: "BetterBlockedUsers",
     description: "Allows you to search in blocked users list and makes names selectable in settings.",
-    tags: ["Appearance", "Shortcuts"],
     authors: [EquicordDevs.TheArmagan],
-    enabledByDefault: true,
+    tags: ["Appearance", "Shortcuts"],
     patches: [
         {
             find: '"],{numberOfBlockedUsers:',

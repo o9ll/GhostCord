@@ -146,7 +146,6 @@ export default definePlugin({
     tags: ["Reactions", "Chat", "Appearance"],
     authors: [Devs.Ven, Devs.KannaDev, Devs.newwares],
     isModified: true,
-    enabledByDefault: true,
     settings,
     patches: [
         {

@@ -47,7 +47,6 @@ export default definePlugin({
     description: "Allows you to edit the default values when creating server invites.",
     tags: ["Servers"],
     authors: [EquicordDevs.VillainsRule],
-    enabledByDefault: true,
     settings,
     patches: [
         {

@@ -28,6 +28,10 @@ import overlayStyle from "./deleteStyleOverlay.css?managed";
 import textStyle from "./deleteStyleText.css?managed";
 import { createMessageDiff, DiffPart } from "./diffUtils";
 import { openHistoryModal } from "./HistoryModal";
+import { startEnhanced, stopEnhanced, Native } from "./enhancedLogic";
+export { Native };
+
+export const Flogger = new Logger("MessageLogger", "#f26c6c");
 
 interface MLMessage extends Message {
     deleted?: boolean;
@@ -437,6 +441,127 @@ export const settings = definePluginSettings({
         description: "Separate addition and removals in diffs for a more readable differential",
         default: false,
     },
+    saveMessages: {
+        default: true,
+        type: OptionType.BOOLEAN,
+        description: "Whether to save the deleted and edited messages.",
+    },
+    saveImages: {
+        type: OptionType.BOOLEAN,
+        description: "Save deleted attachments.",
+        default: false
+    },
+    sortNewest: {
+        default: true,
+        type: OptionType.BOOLEAN,
+        description: "Sort logs by newest.",
+    },
+    cacheMessagesFromServers: {
+        default: false,
+        type: OptionType.BOOLEAN,
+        description: "Usually message logger only logs from whitelisted ids and dms, enabling this would mean it would log messages from all servers as well.",
+    },
+    ignoreWebhooks: {
+        type: OptionType.BOOLEAN,
+        description: "Whether to ignore messages by webhooks",
+        default: false,
+    },
+    ignoreMutedGuilds: {
+        default: false,
+        type: OptionType.BOOLEAN,
+        description: "Messages in muted guilds will not be logged."
+    },
+    ignoreMutedCategories: {
+        default: false,
+        type: OptionType.BOOLEAN,
+        description: "Messages in channels belonging to muted categories will not be logged."
+    },
+    ignoreMutedChannels: {
+        default: false,
+        type: OptionType.BOOLEAN,
+        description: "Messages in muted channels will not be logged."
+    },
+    alwaysLogDirectMessages: {
+        default: true,
+        type: OptionType.BOOLEAN,
+        description: "Always log DMs",
+    },
+    alwaysLogCurrentChannel: {
+        default: true,
+        type: OptionType.BOOLEAN,
+        description: "Always log current selected channel.",
+    },
+    permanentlyRemoveLogByDefault: {
+        default: false,
+        type: OptionType.BOOLEAN,
+        description: "Vencord's base MessageLogger remove log button wiil delete logs permanently",
+    },
+    hideMessageFromMessageLoggers: {
+        default: false,
+        type: OptionType.BOOLEAN,
+        description: "When enabled, a context menu button will be added to messages to allow you to delete messages without them being logged by other loggers."
+    },
+    ShowLogsButton: {
+        default: true,
+        type: OptionType.BOOLEAN,
+        description: "Toggle to whenever show the toolbox or not",
+        restartNeeded: true,
+    },
+    ShowWhereMessageIsFrom: {
+        default: false,
+        type: OptionType.BOOLEAN,
+        description: "Show message channel/author name and server name",
+    },
+    messagesToDisplayAtOnceInLogs: {
+        default: 100,
+        type: OptionType.NUMBER,
+        description: "Number of messages to display at once in logs.",
+    },
+    hideMessageFromMessageLoggersDeletedMessage: {
+        default: "redacted eh",
+        type: OptionType.STRING,
+        description: "The message content to replace the message with when using the hide message from message loggers feature.",
+    },
+    messageLimit: {
+        default: 200,
+        type: OptionType.NUMBER,
+        description: "Maximum number of messages to save. Older messages are deleted when the limit is reached. 0 means there is no limit"
+    },
+    whitelistedIds: {
+        type: OptionType.STRING,
+        default: "",
+        description: "Comma-separated list of whitelisted user/channel/guild IDs"
+    },
+    blacklistedIds: {
+        type: OptionType.STRING,
+        default: "",
+        description: "Comma-separated list of blacklisted user/channel/guild IDs"
+    },
+    clearLogsOnRestart: {
+        type: OptionType.BOOLEAN,
+        default: false,
+        description: "Clear logs on restart"
+    },
+    timeBasedCleanupMinutes: {
+        type: OptionType.NUMBER,
+        default: 0,
+        description: "Delete messages older than X minutes (0 to disable)"
+    },
+    preserveCurrentChannel: {
+        type: OptionType.BOOLEAN,
+        default: false,
+        description: "Preserve current channel in cleanup"
+    },
+    imageCacheDir: {
+        type: OptionType.STRING,
+        default: "",
+        description: "Image cache directory"
+    },
+    logsDir: {
+        type: OptionType.STRING,
+        default: "",
+        description: "Logs directory"
+    },
 }, {
     separatedDiffs: {
         disabled() {
@@ -453,6 +578,7 @@ export const settings = definePluginSettings({
 export default definePlugin({
     name: "MessageLogger",
     enabledByDefault: true,
+    required: false,
     description: "Temporarily logs deleted and edited messages.",
     tags: ["Chat", "Utility"],
     authors: [Devs.rushii, Devs.Ven, Devs.AutumnVN, Devs.Nickyux, Devs.Kyuuhachi, EquicordDevs.justjxke],
@@ -470,6 +596,11 @@ export default definePlugin({
 
     start() {
         addDeleteStyle();
+        startEnhanced();
+    },
+
+    stop() {
+        stopEnhanced();
     },
 
     renderEdits: ErrorBoundary.wrap(

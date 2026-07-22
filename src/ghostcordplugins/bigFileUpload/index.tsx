@@ -475,12 +475,8 @@ const ctxMenuPatch: NavContextMenuPatchCallback = (children, props) => {
     children.splice(1, 0,
         <Menu.MenuItem
             id="upload-big-file"
-            label={
-                <div className={OptionClasses.optionLabel}>
-                    <OpenExternalIcon className={OptionClasses.optionIcon} height={24} width={24} />
-                    <div className={OptionClasses.optionName}>Upload a Big File</div>
-                </div>
-            }
+            label="Upload a Big File"
+            icon={() => <OpenExternalIcon height={24} width={24} />}
             action={triggerFileUpload}
         />
     );

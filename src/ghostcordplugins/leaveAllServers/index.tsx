@@ -232,7 +232,8 @@ export default definePlugin({
     name: "LeaveAllServers",
     enabledByDefault: true,
     description: "Leaves all selected servers. Accessible via right-click on a server.",
-    authors: [{ name: "Ghostcord", id: 0n }],
+    authors: [{ name: "Ghostcord",
+     id: 0n }],
     settings,
 
     start() {

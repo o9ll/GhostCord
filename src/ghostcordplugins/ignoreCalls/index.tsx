@@ -95,7 +95,6 @@ export default definePlugin({
     description: "Allows you to ignore calls from specific users or dm groups.",
     tags: ["Voice"],
     authors: [EquicordDevs.TheArmagan, Devs.thororen],
-    enabledByDefault: false,
     settings,
     patches: [
         {

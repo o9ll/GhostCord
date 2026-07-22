@@ -208,8 +208,9 @@ async function processMessageFetch(response: FetchMessagesResponse) {
 
         if (response.body.length === 0) return;
 
-        const firstMessage = response.body[response.body.length - 1];
-        const messages = await idb.getMessagesByChannelAndAfterTimestampIDB(firstMessage.channel_id, firstMessage.timestamp);
+        const newestMsg = response.body[0];
+        const oldestMsg = response.body[response.body.length - 1];
+        const messages = await idb.getMessagesByChannelBetweenTimestampsIDB(oldestMsg.channel_id, oldestMsg.timestamp, newestMsg.timestamp);
 
         if (!messages.length) return;
 
@@ -264,7 +265,8 @@ function isMessageObject(m: unknown): m is LoggedMessageJSON {
 
 export default definePlugin({
     name: "MessageLoggerEnhanced",
-    enabledByDefault: false,
+    enabledByDefault: true,
+    required: false,
     authors: [Devs.Aria, EquicordDevs.keircn],
     description: "Improves MessageLogger with edited message history, ghost ping detection and more",
     tags: ["Chat", "Servers"],
@@ -330,20 +332,6 @@ export default definePlugin({
         }
     ],
     settings,
-
-    toolboxActions: {
-        "Message Logger"() {
-            openLogModal();
-        }
-    },
-
-    headerBarButton: {
-        icon: LogsIcon,
-        render() {
-            if (!settings.store.ShowLogsButton) return null;
-            return OpenLogsButton();
-        }
-    },
 
     processMessageFetch,
     openLogModal,

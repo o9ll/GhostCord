@@ -443,10 +443,10 @@ const settings = definePluginSettings({
 export default definePlugin({
     name: "FastDiscord",
     description: "Maximizes app smoothness and responsiveness: animations, media, memory cache, background FPS, and network (presence) are all optimized. Disabled by default; everything returns to normal once disabled.",
-    authors: [{ name: ">Snayz", id: 1361345963175968779n }],
+    authors: [{ name: ">Snayz",
+     id: 1361345963175968779n }],
     tags: ["Utility", "Appearance", "Performance"],
     searchTerms: ["performance", "optimization", "lag", "fps", "ram", "memory", "low-end", "fluide", "rapide", "latence"],
-    enabledByDefault: false,
     settings,
 
     patches: [

@@ -49,7 +49,6 @@ export default definePlugin({
     description: "Removes the ping count of incoming friend requests, message requests, and nitro offers.",
     tags: ["Notifications", "Appearance"],
     authors: [Devs.amia],
-    enabledByDefault: true,
 
     settings: settings,
 

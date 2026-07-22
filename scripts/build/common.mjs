@@ -456,8 +456,22 @@ export const commonOpts = {
         "@webpack/patcher": "./src/webpack/patchWebpack",
         "@webpack": "./src/webpack/webpack",
         "@ghostcordplugins": "./src/ghostcordplugins",
+        "@Ghostcord/types/webpack/common": "./src/webpack/common",
+        "@Ghostcord/types/webpack": "./src/webpack/webpack",
+        "@Ghostcord/types/utils": "./src/utils",
+        "@Ghostcord/types/components": "./src/components",
+        "@Ghostcord/types/api": "./src/api",
+        "@Ghostcord/types/plugins": "./src/plugins",
+        "@Ghostcord/types": "./src",
+        "@equicord/types/webpack/common": "./src/webpack/common",
+        "@equicord/types/webpack": "./src/webpack/webpack",
+        "@equicord/types/utils": "./src/utils",
+        "@equicord/types/components": "./src/components",
+        "@equicord/types/api": "./src/api",
+        "@equicord/types": "./src",
     }
 };
+
 
 export const commonRendererPlugins = [
     banImportPlugin(/^react$/, "Cannot import from react. React and hooks should be imported from @webpack/common"),

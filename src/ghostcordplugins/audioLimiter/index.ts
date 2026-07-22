@@ -130,9 +130,9 @@ const settings = definePluginSettings({
 
 export default definePlugin({
     name: "AudioLimiter",
-    enabledByDefault: false,
     description: "Automatically caps the volume of other users — no more screaming or loud noises that pierce your ears.",
-    authors: [{ name: "mushzi", id: 449282863582412850n }],
+    authors: [{ name: "mushzi",
+     id: 449282863582412850n }],
     settings,
 
     patches: [

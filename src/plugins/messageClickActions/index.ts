@@ -580,7 +580,6 @@ export default definePlugin({
     tags: ["Chat", "Shortcuts"],
     authors: [Devs.Ven, EquicordDevs.keircn, EquicordDevs.ZcraftElite, EquicordDevs.omaw],
     isModified: true,
-    enabledByDefault: true,
 
     settings,
 

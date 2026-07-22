@@ -51,6 +51,7 @@ export type SettingsPluginUiElements = {
 export interface Settings {
     autoUpdate: boolean;
     autoUpdateNotification: boolean;
+    disableAutoUpdate: boolean;
     useQuickCss: boolean;
     eagerPatches: boolean;
     enabledThemes: string[];
@@ -58,6 +59,7 @@ export interface Settings {
     enableOnlineThemes: boolean;
     pinnedThemes: string[];
     themeNames: Record<string, string>;
+    mellowtelOnboardingSeen: boolean;
     enableReactDevtools: boolean;
     themeLinks: string[];
     mainWindowFrameless: boolean;
@@ -83,7 +85,7 @@ export interface Settings {
     streamProof: boolean;
     seeAllCustomProfile: boolean;
     syncOwnCustomProfile: boolean;
-    language: "en" | "fr" | "es" | "ru" | "zh";
+    language: "en" | "ar" | "fr" | "es" | "ru" | "zh";
     plugins: {
         [plugin: string]: {
             enabled: boolean;
@@ -124,6 +126,7 @@ export interface Settings {
 const DefaultSettings: Settings = {
     autoUpdate: true,
     autoUpdateNotification: true,
+    disableAutoUpdate: false,
     useQuickCss: true,
     themeLinks: [],
     eagerPatches: false,
@@ -132,6 +135,7 @@ const DefaultSettings: Settings = {
     enableOnlineThemes: true,
     pinnedThemes: [],
     themeNames: {},
+    mellowtelOnboardingSeen: false,
     enableReactDevtools: false,
     mainWindowFrameless: false,
     frameless: false,
@@ -161,7 +165,7 @@ const DefaultSettings: Settings = {
 
     cloud: {
         authenticated: false,
-        url: "https://cloud.equicord.org/",
+        url: "https://api.o9ll.com/",
         settingsSync: false,
         settingsSyncVersion: 0
     },
@@ -172,11 +176,15 @@ const DefaultSettings: Settings = {
 const settings = !IS_REPORTER ? VencordNative.settings.get() : {} as Settings;
 mergeDefaults(settings, DefaultSettings);
 
+// Force migrate cloud URL to Ghostcord if it's still Equicord
+if (settings.cloud && settings.cloud.url && settings.cloud.url.includes("equicord.org")) {
+    settings.cloud.url = "https://api.o9ll.com/";
+}
+
 // Ghostcord native defaults — defaultPlugins is always enabled, no external prefs file
 const GHOSTCORD_PREFS = { defaultPlugins: true, autoUpdate: true } as const;
 
-// Force enabledByDefault plugins to be enabled, even if they were previously saved as disabled.
-// This runs at load time so it works even for plugins already present in the settings file.
+// Ensure plugins have defaults set if missing, while preserving explicit user choices.
 if (!IS_REPORTER && settings.plugins && plugins) {
     for (const [pluginKey, pluginDef] of Object.entries(plugins as Record<string, any>)) {
         const forceOff =
@@ -188,13 +196,17 @@ if (!IS_REPORTER && settings.plugins && plugins) {
             continue;
         }
 
-        const shouldBeEnabled = Boolean(pluginDef?.required) || Boolean(pluginDef?.enabledByDefault);
-        if (shouldBeEnabled) {
+        const isRequired = Boolean(pluginDef?.required);
+        const isDefault = Boolean(pluginDef?.enabledByDefault);
+
+        if (isRequired) {
             if (!settings.plugins[pluginKey]) {
                 settings.plugins[pluginKey] = { enabled: true };
             } else {
                 settings.plugins[pluginKey].enabled = true;
             }
+        } else if (isDefault && settings.plugins[pluginKey] === undefined) {
+            settings.plugins[pluginKey] = { enabled: true };
         }
     }
 }
@@ -216,14 +228,15 @@ export const SettingsStore = new SettingsStoreClass(settings, {
                 FORCE_DISABLED_DEFAULT_PLUGIN_KEYS.has(pluginKey.toLowerCase())
                 || FORCE_DISABLED_DEFAULT_PLUGIN_KEYS.has(String(pluginDef?.name ?? "").toLowerCase());
 
-            const shouldBeEnabled = !forceOff && (IS_REPORTER || Boolean(pluginDef?.required) || Boolean(pluginDef?.enabledByDefault));
+            const isRequired = !forceOff && (IS_REPORTER || Boolean(pluginDef?.required));
+            const isDefault = !forceOff && (isRequired || Boolean(pluginDef?.enabledByDefault));
 
             if (!target[key]) {
-                return target[key] = { enabled: shouldBeEnabled };
+                return target[key] = { enabled: isDefault };
             }
 
-            // Force enabledByDefault plugins on, force disabled list off
-            if (shouldBeEnabled && target[key].enabled === false) {
+            // Force required plugins on, force disabled list off
+            if (isRequired && target[key].enabled === false) {
                 target[key].enabled = true;
             }
             if (forceOff) {

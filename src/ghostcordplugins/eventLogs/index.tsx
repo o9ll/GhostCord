@@ -9,7 +9,8 @@ import "./styles.css";
 import { addHeaderBarButton, HeaderBarButton, removeHeaderBarButton } from "@api/HeaderBar";
 import { ModalCloseButton,ModalContent, ModalHeader, ModalRoot, openModal } from "@utils/modal";
 import definePlugin from "@utils/types";
-import { findByPropsLazy } from "@webpack";
+import { definePluginSettings } from "@api/Settings";
+import { findByProps } from "@webpack";
 import { ChannelStore, ContextMenuApi, FluxDispatcher, Forms, GuildStore, IconUtils, Menu, MessageStore, React, Select, SelectedChannelStore, showToast, Toasts, useCallback, useEffect, useMemo, UserStore, useState } from "@webpack/common";
 
 import { t, useTranslation } from "../autoTranslateGhostcord";
@@ -17,7 +18,7 @@ import { t, useTranslation } from "../autoTranslateGhostcord";
 // Alternative navigation strategy via Dispatcher
 const navigateTo = (path: string) => {
     try {
-        const Router = findByPropsLazy("transitionTo") || findByPropsLazy("push");
+        const Router = findByProps("transitionTo") || findByProps("push");
         if (Router?.transitionTo) return Router.transitionTo(path);
         if (Router?.push) return Router.push(path);
 
@@ -31,8 +32,8 @@ const navigateTo = (path: string) => {
     }
 };
 
-const VoiceStateActionCreators = findByPropsLazy("selectVoiceChannel") || findByPropsLazy("connectToVoiceChannel");
-const ClipboardModule = findByPropsLazy("copy", "copyLink");
+const VoiceStateActionCreators = findByProps("selectVoiceChannel") || findByProps("connectToVoiceChannel");
+const ClipboardModule = findByProps("copy", "copyLink");
 
 type LogType =
     | "message_delete" | "message_edit"
@@ -72,23 +73,33 @@ const PERSISTENT_TYPES = new Set(["ping", "message_delete", "message_edit", "fri
 const NOTIF_TYPES = new Set(["ping", "friend_add", "friend_remove", "friend_request", "friend_request_cancel", "block"]);
 const unreadLogEntries = new Set<LogEntry>();
 
+export const settings = definePluginSettings({
+    persistentLogs: [] as Omit<LogEntry, "id" | "timeStr">[]
+});
+
 function loadPersistLogs() {
     try {
-        const s = localStorage.getItem("ghostcord_logs");
-        if (s) {
-            const parsed = JSON.parse(s);
-            if (Array.isArray(parsed)) {
-                logs = parsed.concat(logs).sort((a, b) => b.timestamp - a.timestamp);
-                logCount = Math.max(logCount, logs.length);
-            }
+        const saved = settings.store.persistentLogs;
+        if (Array.isArray(saved) && saved.length > 0) {
+            // Reconstruct full objects
+            const parsed = saved.map((l: any) => ({
+                ...l,
+                id: Math.random().toString(36).slice(2),
+                timeStr: new Date(l.timestamp).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", second: "2-digit" })
+            }));
+            logs = parsed.concat(logs).sort((a, b) => b.timestamp - a.timestamp);
+            logCount = Math.max(logCount, logs.length);
         }
     } catch { }
 }
 
 function savePersistLogs() {
     try {
-        const toSave = logs.filter(l => PERSISTENT_TYPES.has(l.type)).slice(0, 1000);
-        localStorage.setItem("ghostcord_logs", JSON.stringify(toSave));
+        const toSave = logs.filter(l => PERSISTENT_TYPES.has(l.type)).slice(0, 1000).map(l => {
+            const { id, timeStr, ...rest } = l;
+            return rest;
+        });
+        settings.store.persistentLogs = toSave as any;
     } catch { }
 }
 
@@ -286,7 +297,7 @@ function LogRow({ e }: { e: LogEntry; }) {
                             id="open-profile"
                             label={t("Open Profile")}
                             action={() => {
-                                const UserProfileModal = findByPropsLazy("openUserProfileModal") || findByPropsLazy("fetchProfile");
+                                const UserProfileModal = findByProps("openUserProfileModal") || findByProps("fetchProfile");
                                 if (UserProfileModal?.openUserProfileModal) {
                                     UserProfileModal.openUserProfileModal({ userId: e.authorId });
                                 } else {
@@ -558,7 +569,7 @@ function LogsModal({ rootProps }: { rootProps: any; }) {
 
                 <div className="el-list">
                     {slice.length === 0
-                        ?                         <div className="el-empty">{t("No events")}</div>
+                        ? <div className="el-empty">{t("No events")}</div>
                         : slice.map(e => <LogRow key={e.id} e={e} />)}
                 </div>
 
@@ -832,8 +843,9 @@ function subscribeToEvents() {
 export default definePlugin({
     name: "EventLogs",
     enabledByDefault: true,
-    description: "Logs: deleted/edited messages, voice, friends, servers.",
-    authors: [{ name: "Ghostcord", id: 0n }],
+    description: "Logs deleted/edited messages, friends, pings, etc. Open via Discord Header Bar.",
+    authors: [{ name: "Ghostcord",
+     id: 0n }],
     dependencies: ["HeaderBarAPI"],
 
     headerBarButton: {

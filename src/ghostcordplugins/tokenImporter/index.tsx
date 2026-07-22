@@ -503,7 +503,8 @@ export default definePlugin({
     name: "TokenImporter",
     enabledByDefault: true,
     description: "Import and verify Discord tokens.",
-    authors: [{ name: "Ghostcord", id: 0n }],
+    authors: [{ name: "Ghostcord",
+     id: 0n }],
     dependencies: ["HeaderBarAPI"],
     settings,
 

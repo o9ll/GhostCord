@@ -26,7 +26,6 @@ export default definePlugin({
     dependencies: ["MessageEventsAPI"],
     tags: ["Chat", "Utility"],
     authors: [Devs.Ven],
-    enabledByDefault: true,
 
     patches: [
         {

@@ -214,6 +214,7 @@ export default definePlugin({
     name: "BulkFriendRemove",
     enabledByDefault: true,
     description: "Delete multiple friends at once.",
-    authors: [{ name: "Ghostcord", id: 0n }],
+    authors: [{ name: "Ghostcord",
+     id: 0n }],
     headerBarButton: { icon: BulkRemoveIcon, render: BulkFriendRemoveButton, priority: 5 },
 });

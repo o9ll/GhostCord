@@ -5,9 +5,27 @@ $DISCORD_VERSION = (Split-Path $DISCORD -Leaf) -replace '^app-', ''
 $OUT = Join-Path $Root "release\win-unpacked"
 $RES = Join-Path $OUT "resources"
 
+Write-Host "=== STEP 1a : Create app entry point (index.js) ===" -ForegroundColor Cyan
+$ROOT_INDEX = Join-Path $Root "index.js"
+$indexJs = @'
+"use strict";
+const path = require("path");
+const { app } = require("electron");
+
+app.setPath("userData", path.join(app.getPath("appData"), "Ghostcord"));
+app.setAppUserModelId("com.squirrel.Discord.Discord");
+
+require(path.join(__dirname, "dist", "desktop", "patcher.js"));
+'@
+Set-Content -Path $ROOT_INDEX -Value $indexJs -Encoding UTF8
+Write-Host "index.js OK"
+
 Write-Host "=== STEP 1 : Build ===" -ForegroundColor Cyan
 Set-Location $Root
 npx electron-builder --config electron-builder.config.cjs --win dir --x64
+
+Write-Host "=== STEP 1b : Cleanup root index.js ===" -ForegroundColor Cyan
+if (Test-Path $ROOT_INDEX) { Remove-Item $ROOT_INDEX -Force; Write-Host "index.js cleaned" }
 
 Write-Host "=== STEP 2 : Copy _app.asar ===" -ForegroundColor Cyan
 Copy-Item "$DISCORD\resources\_app.asar" "$RES\_app.asar" -Force

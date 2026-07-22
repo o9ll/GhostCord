@@ -31,7 +31,6 @@ export default definePlugin({
     description: "Replaces the window title prefix",
     tags: ["Customisation"],
     authors: [Devs.Kyuuhachi],
-    enabledByDefault: true,
     settings,
 
     patches: [

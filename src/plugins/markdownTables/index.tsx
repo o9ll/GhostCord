@@ -334,7 +334,6 @@ export default definePlugin({
     description: "Render GitHub-style markdown tables in Discord messages.",
     tags: ["Chat", "Appearance"],
     authors: [EquicordDevs.yafyx],
-    enabledByDefault: true,
     managedStyle,
     patches: [
         {

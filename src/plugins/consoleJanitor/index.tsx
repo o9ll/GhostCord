@@ -110,7 +110,6 @@ export default definePlugin({
     description: "Disables annoying console messages/errors",
     authors: [Devs.Nuckyz, Devs.sadan],
     tags: ["Developers", "Console", "Utility"],
-    enabledByDefault: true,
     settings,
 
     startAt: StartAt.Init,

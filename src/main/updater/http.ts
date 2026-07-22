@@ -13,9 +13,8 @@ import { rmSync,writeFileSync } from "original-fs";
 import { join } from "path";
 import { serializeErrors } from "./common";
 
-const RELEASES_REPO = `o9ll/ghostcord`;
-const API_BASE      = `https://api.github.com/repos/${RELEASES_REPO}`;
-const REPO_URL      = `https://github.com/${RELEASES_REPO}`;
+const API_BASE = `https://api.github.com/repos/o9ll/ghostcord`;
+const REPO_URL = `https://github.com/o9ll/ghostcord`;
 declare const VERSION: string;
 const CURRENT_VERSION = `v${VERSION}`;
 const ZIP_FILE = "ghostcord-dist.zip";

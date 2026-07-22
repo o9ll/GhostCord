@@ -23,6 +23,7 @@ import { isDeckGameMode } from "./utils/steamOS";
 console.log("Ghostcord v" + app.getVersion());
 
 process.env.Ghostcord_USER_DATA_DIR = DATA_DIR;
+process.env.GHOSTCORD_USER_DATA_DIR = DATA_DIR;
 
 const isLinux = process.platform === "linux";
 

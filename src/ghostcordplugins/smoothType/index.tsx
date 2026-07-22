@@ -220,7 +220,8 @@ export default definePlugin({
     name: "SmoothType",
     enabledByDefault: false,
     description: "The plugin allows you to fully customize the cursor caret's visual settings, including adjustable transition delays and custom CSS animation effects.",
-    authors: [{ name: "Ghostcord", id: 0n }],
+    authors: [{ name: "Ghostcord",
+     id: 0n }],
     settings,
 
     start() {

@@ -127,7 +127,6 @@ export default definePlugin({
     dependencies: ["MessageAccessoriesAPI"],
     tags: ["Media", "Utility"],
     authors: [Devs.nin0dev, EquicordDevs.NassCT],
-    enabledByDefault: true,
     settings,
     Providers,
     cache: ({} as Record<string, SongLinkResult>),

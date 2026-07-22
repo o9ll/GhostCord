@@ -14,7 +14,7 @@ import ErrorBoundary from "@components/ErrorBoundary";
 import { Logger } from "@utils/Logger";
 import definePlugin, { OptionType } from "@utils/types";
 import { findStoreLazy } from "@webpack";
-import { Alerts, Button, Clickable, FluxDispatcher, IconUtils, Menu, openModal, SettingsRouter, showToast, TextInput, Toasts, useEffect, useState } from "@webpack/common";
+import { Alerts, Button, Clickable, FluxDispatcher, IconUtils, Menu, openModal, RestAPI, SettingsRouter, showToast, TextInput, Toasts, useEffect, useState } from "@webpack/common";
 import { tPlugin as t } from "@api/pluginI18n";
 
 const logger = new Logger("SaveProfile");
@@ -32,6 +32,8 @@ interface SavedProfileConfig {
     bio: string | null;
     avatarDataUrl: string | null;
     bannerDataUrl: string | null;
+    avatarHash?: string | null;
+    bannerHash?: string | null;
     accentColor: number | null;
     themeColors: number[] | null;
     avatarDecoration: any | null;
@@ -139,6 +141,8 @@ function SaveProfileSettings({ closePluginSettings }: { closePluginSettings: () 
                 bio: userProfile?.bio ?? null,
                 avatarDataUrl,
                 bannerDataUrl,
+                avatarHash: currentUser.avatar ?? null,
+                bannerHash: userProfile?.banner ?? null,
                 accentColor: userProfile?.accentColor ?? null,
                 themeColors: userProfile?.themeColors ?? null,
                 avatarDecoration: currentUser.avatarDecorationData ?? null,
@@ -158,56 +162,118 @@ function SaveProfileSettings({ closePluginSettings }: { closePluginSettings: () 
         }
     };
 
-    // Load saved configuration
-    const handleLoadProfile = (preset: SavedProfileConfig) => {
+    // Apply saved profile directly via Discord REST API — no "Edit Profile → Save" needed
+    const handleLoadProfile = async (preset: SavedProfileConfig) => {
         try {
-            const payload: any = {};
-            if (preset.globalName !== undefined) payload.pendingGlobalName = preset.globalName;
-            if (preset.bio !== undefined) payload.pendingBio = preset.bio;
-            if (preset.themeColors !== undefined) payload.pendingThemeColors = preset.themeColors;
-            if (preset.accentColor !== undefined) payload.pendingAccentColor = preset.accentColor;
-            if (preset.avatarDecoration !== undefined) payload.pendingAvatarDecoration = preset.avatarDecoration;
-
-            if (preset.avatarDataUrl) {
-                payload.pendingAvatar = {
-                    assetOrigin: "NEW_ASSET",
-                    imageUri: preset.avatarDataUrl,
-                    description: `saveprofile-${preset.name}`
-                };
+            const currentUser = UserStore.getCurrentUser();
+            if (!currentUser) {
+                showToast(t("Could not load profile configuration."), Toasts.Type.FAILURE);
+                return;
             }
-            if (preset.bannerDataUrl) {
-                payload.pendingBanner = {
-                    assetOrigin: "NEW_ASSET",
-                    imageUri: preset.bannerDataUrl,
-                    description: `saveprofile-${preset.name}`
-                };
-            }
+            const userProfile = UserProfileStore.getUserProfile(currentUser.id);
 
-            // Dispatch settings changes
-            FluxDispatcher.dispatch({
-                type: "USER_PROFILE_SETTINGS_SET_PENDING_CHANGES",
-                ...payload
-            });
+            showToast(t("Applying profile…"), Toasts.Type.MESSAGE);
 
-            // Set custom status
+            let anyError = false;
+
+            // ── 1. Custom status (instant, no REST needed) ───────────────────
             if (preset.customStatus && CustomStatusSettings) {
-                CustomStatusSettings.updateSetting({
-                    text: preset.customStatus.text ?? "",
-                    expiresAtMs: preset.customStatus.expiresAtMs ?? "0",
-                    emojiId: preset.customStatus.emojiId ?? "0",
-                    emojiName: preset.customStatus.emojiName ?? ""
-                });
+                try {
+                    CustomStatusSettings.updateSetting({
+                        text: preset.customStatus.text ?? "",
+                        expiresAtMs: preset.customStatus.expiresAtMs ?? "0",
+                        emojiId: preset.customStatus.emojiId ?? "0",
+                        emojiName: preset.customStatus.emojiName ?? ""
+                    });
+                } catch (e) {
+                    logger.error("Failed to update custom status", e);
+                }
             }
 
-            // Open settings page & close current menu
-            closePluginSettings();
-            SettingsRouter.openUserSettings("profile_panel");
-            showToast(t("Profile configuration loaded! Click 'Save Changes' at the bottom."), Toasts.Type.SUCCESS);
+            // ── 2. Nitro colors (theme_colors, accent_color) ─────────────────
+            // Discord REST rejects these for non-real-Nitro accounts with 500.
+            // Apply them locally via FluxDispatcher so they show immediately
+            // without hitting the API (same approach as customProfile plugin).
+            if (preset.themeColors !== undefined || preset.accentColor !== undefined) {
+                try {
+                    const colorPayload: Record<string, any> = {};
+                    if (preset.themeColors !== undefined) colorPayload.pendingThemeColors = preset.themeColors;
+                    if (preset.accentColor !== undefined) colorPayload.pendingAccentColor = preset.accentColor;
+                    FluxDispatcher.dispatch({
+                        type: "USER_PROFILE_SETTINGS_SET_PENDING_CHANGES",
+                        ...colorPayload
+                    });
+                    // Also try to persist via REST (will only succeed with real Nitro)
+                    const nitroBody: Record<string, any> = {};
+                    if (preset.themeColors !== undefined) nitroBody.theme_colors = preset.themeColors ?? null;
+                    if (preset.accentColor !== undefined) nitroBody.accent_color = preset.accentColor ?? null;
+                    RestAPI.patch({ url: "/users/@me/profile", body: nitroBody }).catch(() => {
+                        // Silently fail — non-Nitro accounts can't persist colors via REST
+                    });
+                } catch (e) {
+                    logger.error("Failed to apply Nitro colors", e);
+                }
+            }
+
+            // ── 3. PATCH /users/@me  (global name + avatar) ─────────────────
+            // Discord accepts: global_name, avatar (base64)
+            const userPatch: Record<string, any> = {};
+
+            if (preset.globalName !== undefined && preset.globalName !== currentUser.globalName) {
+                userPatch.global_name = preset.globalName;
+            }
+            // avatar lives on /users/@me, NOT on /users/@me/profile
+            if (preset.avatarDataUrl && preset.avatarHash !== currentUser.avatar) {
+                userPatch.avatar = preset.avatarDataUrl;
+            }
+
+            if (Object.keys(userPatch).length) {
+                try {
+                    await RestAPI.patch({ url: "/users/@me", body: userPatch });
+                } catch (e: any) {
+                    const msg = e?.body?.message ?? e?.message ?? String(e);
+                    logger.error("Failed to patch /users/@me", e);
+                    showToast(`Avatar/name error: ${msg}`, Toasts.Type.FAILURE);
+                    anyError = true;
+                }
+            }
+
+            // ── 4. PATCH /users/@me/profile  (bio + banner only) ─────────────
+            // Do NOT send theme_colors / accent_color here — causes 500 for non-Nitro
+            const profilePatch: Record<string, any> = {};
+
+            // bio: send empty string to clear, or the saved value
+            if (preset.bio !== undefined) {
+                profilePatch.bio = preset.bio ?? "";
+            }
+
+            // banner — only upload if hash differs; send null to clear banner
+            if (preset.bannerDataUrl && userProfile && preset.bannerHash !== userProfile.banner) {
+                profilePatch.banner = preset.bannerDataUrl;
+            } else if (preset.bannerHash === null && userProfile?.banner) {
+                profilePatch.banner = null; // explicitly clear the banner
+            }
+
+            if (Object.keys(profilePatch).length) {
+                try {
+                    await RestAPI.patch({ url: "/users/@me/profile", body: profilePatch });
+                } catch (e: any) {
+                    const msg = e?.body?.message ?? e?.message ?? String(e);
+                    logger.error("Failed to patch /users/@me/profile", e);
+                    showToast(`Bio/Banner error: ${msg}`, Toasts.Type.FAILURE);
+                    anyError = true;
+                }
+            }
+
+            if (!anyError) {
+                showToast(t("Profile applied instantly! ✔"), Toasts.Type.SUCCESS);
+            }
         } catch (err) {
             logger.error("Failed to load profile", err);
             showToast(t("Could not load profile configuration."), Toasts.Type.FAILURE);
         }
     };
+
 
     // Delete saved configuration
     const handleDeleteProfile = (id: string) => {
@@ -378,7 +444,8 @@ export const settings = definePluginSettings({
 export default definePlugin({
     name: "SaveProfile",
     description: "Allows you to save and load profile backups, including global name, pfp, banner, status, nitro colors and bio.",
-    authors: [{ name: "irritably", id: 928787166916640838n }],
+    authors: [{ name: "irritably",
+     id: 928787166916640838n }],
     tags: ["Appearance", "Customisation", "Utility"],
     settings
 });

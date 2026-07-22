@@ -163,7 +163,6 @@ export default definePlugin({
     description: "Show connected accounts in user popouts",
     tags: ["Friends", "Appearance"],
     authors: [Devs.TheKodeToad],
-    enabledByDefault: true,
     settings,
 
     patches: [

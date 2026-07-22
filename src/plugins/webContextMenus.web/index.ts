@@ -90,7 +90,6 @@ export default definePlugin({
     description: "Re-adds context menus missing in the web version of Discord: Links & Images (Copy/Open Link/Image), Text Area (Copy, Cut, Paste, SpellCheck)",
     tags: ["Utility"],
     authors: [Devs.Ven],
-    enabledByDefault: false,
     required: requiredByPlatform,
 
     settings,

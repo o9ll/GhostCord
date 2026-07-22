@@ -12,7 +12,6 @@ export default definePlugin({
     description: "Removes the gap between codeblocks and text below it",
     tags: ["Appearance"],
     authors: [Devs.Grzesiek11],
-    enabledByDefault: true,
     patches: [
         {
             find: String.raw`/^${"```"}(?:([a-z0-9_+\-.#]+?)\n)?\n*([^\n][^]*?)\n*${"```"}`,

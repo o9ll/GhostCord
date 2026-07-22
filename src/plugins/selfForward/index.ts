@@ -12,7 +12,6 @@ export default definePlugin({
     description: "Adds the current channel to the forward list popup",
     tags: ["Utility"],
     authors: [EquicordDevs.VillainsRule],
-    enabledByDefault: true,
     patches: [
         {
             find: ".getChannelHistory(),",

@@ -46,7 +46,6 @@ export default definePlugin({
     authors: [EquicordDevs.PWall],
     description: "Adds the ability to change the order of your favourite emotes",
     tags: ["Customisation", "Chat", "Emotes"],
-    enabledByDefault: true,
     patches: [
         {
             find: "#{intl::EMOJI_FAVORITE_TOOLTIP}",

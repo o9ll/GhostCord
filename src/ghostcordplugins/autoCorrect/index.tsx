@@ -167,9 +167,10 @@ const AutoCorrectChatBarButton: ChatBarButtonFactory = ({ type }) => {
 
 export default definePlugin({
     name: "AutoCorrect",
-    enabledByDefault: false,
+    enabledByDefault: true,
     description: "Automatically corrects spelling and grammar before sending. Requires a free Groq API key configured in GhostcordAI.",
-    authors: [{ name: "Ghostcord", id: 0n }],
+    authors: [{ name: "Ghostcord",
+     id: 0n }],
     settings,
 
     start() { },

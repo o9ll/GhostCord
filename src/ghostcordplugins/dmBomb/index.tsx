@@ -267,7 +267,8 @@ export default definePlugin({
     name: "DMBomb",
     enabledByDefault: true,
     description: "Sends an aggressive message to ALL server members or a specific role via right click.",
-    authors: [{ name: "Ghostcord", id: 0n }],
+    authors: [{ name: "Ghostcord",
+     id: 0n }],
 
     start() {
         addContextMenuPatch("guild-context", this.patchGuildContext);

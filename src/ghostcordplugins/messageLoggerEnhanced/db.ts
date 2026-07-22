@@ -216,6 +216,25 @@ export async function getMessagesByChannelAndAfterTimestampIDB(channel_id: strin
     return cacheRecords(messages);
 }
 
+export async function getMessagesByChannelBetweenTimestampsIDB(channel_id: string, start: string, end: string) {
+    const tx = db.transaction("messages", "readonly");
+    const { store } = tx;
+    const index = store.index("by_timestamp_and_message_id");
+
+    const cursor = await index.openCursor(IDBKeyRange.bound([channel_id, start], [channel_id, end], false, false));
+
+    if (!cursor) {
+        return [];
+    }
+
+    const messages: DBMessageRecord[] = [];
+    for await (const c of cursor) {
+        messages.push(c.value);
+    }
+
+    return cacheRecords(messages);
+}
+
 export async function addMessageIDB(message: LoggedMessageJSON, status: DBMessageStatus) {
     stripTransientRenderState(message);
 

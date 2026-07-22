@@ -184,8 +184,10 @@ export default definePlugin({
                     type: ApplicationCommandOptionType.STRING,
                     required: true,
                     choices: [
-                        { name: "cat", value: "cat", label: "cat" },
-                        { name: "dog", value: "dog", label: "dog" },
+                        { name: "cat",
+     value: "cat", label: "cat" },
+                        { name: "dog",
+     value: "dog", label: "dog" },
                     ]
                 }
             ],
@@ -255,11 +257,16 @@ export default definePlugin({
                     type: ApplicationCommandOptionType.STRING,
                     required: true,
                     choices: [
-                        { name: "toLowerCase", value: "toLowerCase", label: "toLowerCase" },
-                        { name: "toUpperCase", value: "toUpperCase", label: "toUpperCase" },
-                        { name: "toLocaleLowerCase", value: "toLocaleLowerCase", label: "toLocaleLowerCase" },
-                        { name: "toLocaleUpperCase", value: "toLocaleUpperCase", label: "toLocaleUpperCase" },
-                        { name: "stay the same", value: "same", label: "stay the same" }
+                        { name: "toLowerCase",
+     value: "toLowerCase", label: "toLowerCase" },
+                        { name: "toUpperCase",
+     value: "toUpperCase", label: "toUpperCase" },
+                        { name: "toLocaleLowerCase",
+     value: "toLocaleLowerCase", label: "toLocaleLowerCase" },
+                        { name: "toLocaleUpperCase",
+     value: "toLocaleUpperCase", label: "toLocaleUpperCase" },
+                        { name: "stay the same",
+     value: "same", label: "stay the same" }
                     ]
                 },
                 {
@@ -280,10 +287,14 @@ export default definePlugin({
                     type: ApplicationCommandOptionType.STRING,
                     required: false,
                     choices: [
-                        { name: "NFC", value: "NFC", label: "NFC" },
-                        { name: "NFD", value: "NFD", label: "NFD" },
-                        { name: "NFKC", value: "NFKC", label: "NFKC" },
-                        { name: "NFKD", value: "NFKD", label: "NFKD" }
+                        { name: "NFC",
+     value: "NFC", label: "NFC" },
+                        { name: "NFD",
+     value: "NFD", label: "NFD" },
+                        { name: "NFKC",
+     value: "NFKC", label: "NFKC" },
+                        { name: "NFKD",
+     value: "NFKD", label: "NFKD" }
                     ]
                 },
             ],

@@ -95,6 +95,22 @@
     color: var(--interactive-hover);
 }
 
+.nc-badge-btn.nc-badge-btn-disabled {
+    cursor: not-allowed;
+}
+
+.nc-badge-btn.nc-badge-btn-disabled:hover {
+    color: var(--interactive-normal);
+}
+
+.nc-badge-btn.nc-badge-liked {
+    color: #ffffff;
+}
+
+.nc-badge-btn.nc-badge-liked:hover {
+    color: #ffffff;
+}
+
 .vc-addon-note {
     height: 36px;
     overflow: hidden;

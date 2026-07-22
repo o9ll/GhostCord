@@ -94,7 +94,6 @@ export default definePlugin({
     description: "Customizable notifications with improved mention formatting",
     tags: ["Chat", "Friends", "Notifications", "Servers"],
     authors: [EquicordDevs.smuki],
-    enabledByDefault: true,
     settings,
 
     flux: {

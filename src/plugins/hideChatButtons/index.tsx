@@ -86,7 +86,6 @@ export default definePlugin({
     tags: ["Chat", "Utility"],
     authors: [EquicordDevs.iamme],
     dependencies: ["ChatInputButtonAPI"],
-    enabledByDefault: true,
     settings: settings,
     startAt: StartAt.Init,
     chatBarButtonWrapper: {

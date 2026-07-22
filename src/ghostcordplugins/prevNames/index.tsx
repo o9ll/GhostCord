@@ -657,8 +657,8 @@ const userCtxPatch: NavContextMenuPatchCallback = (children, props) => {
 export default definePlugin({
     name: "PrevNames",
     description: "Shows the username history of a user. Right-click → PrevNames.",
-    authors: [{ name: "you", id: 0n }],
-    enabledByDefault: true,
+    authors: [{ name: "you",
+     id: 0n }],
     dependencies: ["ContextMenuAPI"],
 
     start() {

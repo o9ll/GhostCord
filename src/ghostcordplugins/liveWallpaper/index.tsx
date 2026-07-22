@@ -311,7 +311,8 @@ export default definePlugin({
     name: "LiveWallpaper",
     enabledByDefault: true,
     description: "Global wallpaper for the entire Discord interface (image, gif, video). Compatible with ChannelWallpaper.",
-    authors: [{ name: "Ghostcord", id: 0n }],
+    authors: [{ name: "Ghostcord",
+     id: 0n }],
     settings,
 
     start() {

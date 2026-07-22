@@ -13,15 +13,18 @@ import ErrorBoundary from "@components/ErrorBoundary";
 import { copyToClipboard } from "@utils/clipboard";
 import { Logger } from "@utils/Logger";
 import definePlugin, { OptionType } from "@utils/types";
-import type { Channel, User } from "@vencord/discord-types";
+import type { NavContextMenuPatchCallback } from "@utils/types";
 import { findByPropsLazy, findStoreLazy } from "@webpack";
-import { Alerts, Button, Clickable, FluxDispatcher, IconUtils, Menu, openModal, SettingsRouter, showToast, TextInput, Toasts, useEffect, useState } from "@webpack/common";
+import { Alerts, Button, Clickable, FluxDispatcher, IconUtils, Menu, openModal, SettingsRouter, showToast, TextInput, Toasts, useEffect, useState, useStateFromStores, RelationshipStore, ChannelStore, React, ModalRoot, ModalHeader, ModalContent, ModalFooter } from "@webpack/common";
+import { NavigationRouter } from "@webpack/common/utils";
 import { tPlugin as t } from "@api/pluginI18n";
+import type { Channel, User } from "@vencord/discord-types";
 
 const logger = new Logger("SaveThem");
 
 const UserStore = findStoreLazy("UserStore") as any;
 const ChannelActionCreators = findByPropsLazy("openPrivateChannel") as any;
+const RelationshipActions = findByPropsLazy("removeFriend", "addRelationship", "cancelFriendRequest") as any;
 
 interface SavedUser {
     id: string;
@@ -110,6 +113,92 @@ async function handleSaveUser(user: User) {
     });
 }
 
+function SaveThemCard({ u, closePluginSettings, handleRemoveUser, handleCopyId }: { u: SavedUser, closePluginSettings: () => void, handleRemoveUser: (id: string, name: string) => void, handleCopyId: (id: string) => void }) {
+    const relType = useStateFromStores([RelationshipStore], () => RelationshipStore.getRelationshipType(u.id), [u.id]);
+
+    const isFriend = relType === 1;
+    const isOutgoing = relType === 4;
+    const isIncoming = relType === 3;
+
+    const handleRelationshipAction = () => {
+        try {
+            if (isFriend) {
+                RelationshipActions.removeFriend(u.id);
+                showToast(t("Friend removed."), Toasts.Type.SUCCESS);
+            } else if (isOutgoing) {
+                RelationshipActions.cancelFriendRequest(u.id);
+                showToast(t("Friend request cancelled."), Toasts.Type.SUCCESS);
+            } else if (isIncoming) {
+                RelationshipActions.removeFriend(u.id); // Decline request
+                showToast(t("Friend request declined."), Toasts.Type.SUCCESS);
+            } else {
+                RelationshipActions.addRelationship({ userId: u.id, context: { location: "SaveThem" } });
+                showToast(t("Friend request sent!"), Toasts.Type.SUCCESS);
+            }
+        } catch (err) {
+            logger.error("Failed relationship action", err);
+            showToast(t("Could not update relationship."), Toasts.Type.FAILURE);
+        }
+    };
+
+    const handleDMUser = async () => {
+        try {
+            const immediateId = ChannelStore.getDMFromUserId?.(u.id);
+            if (immediateId) {
+                NavigationRouter?.transitionTo(`/channels/@me/${immediateId}`);
+                closePluginSettings();
+                return;
+            }
+
+            // openPrivateChannel takes a plain userId string (not an options object)
+            await Promise.resolve(ChannelActionCreators.openPrivateChannel(u.id));
+            closePluginSettings();
+        } catch (err) {
+            logger.error("Failed to open DM", err);
+            showToast(t("Could not open DM with this user."), Toasts.Type.FAILURE);
+        }
+    };
+
+    let friendButtonText = t("Add Friend");
+    let friendButtonColor = "GREEN";
+    if (isFriend) {
+        friendButtonText = t("Remove Friend");
+        friendButtonColor = "RED";
+    } else if (isOutgoing || isIncoming) {
+        friendButtonText = t("Cancel Request");
+        friendButtonColor = "SECONDARY";
+    }
+
+    return (
+        <div className="vc-savethem-card">
+            <div className="vc-savethem-profile-row">
+                <img
+                    className="vc-savethem-avatar"
+                    src={u.avatarDataUrl ?? IconUtils.getDefaultAvatarURL(u.id)}
+                    alt=""
+                    draggable={false}
+                />
+                <div className="vc-savethem-user-info">
+                    <span className="vc-savethem-name">{u.globalName}</span>
+                    <span className="vc-savethem-username">@{u.username}</span>
+                </div>
+            </div>
+
+            <div className="vc-savethem-reason-container">
+                <span className="vc-savethem-reason-label">{t("Saved Note / Reason")}</span>
+                <span>{u.reason}</span>
+            </div>
+
+            <div className="vc-savethem-actions">
+                <Button size="small" color={friendButtonColor as any} onClick={handleRelationshipAction}>{friendButtonText}</Button>
+                <Button size="small" onClick={handleDMUser}>{t("DM")}</Button>
+                <Button size="small" color="PRIMARY" onClick={() => handleCopyId(u.id)}>{t("Copy ID")}</Button>
+                <Button size="small" color="RED" onClick={() => handleRemoveUser(u.id, u.globalName)}>{t("Remove")}</Button>
+            </div>
+        </div>
+    );
+}
+
 function SaveThemSettings({ closePluginSettings }: { closePluginSettings: () => void; }) {
     const [users, setUsers] = useState<SavedUser[]>([]);
 
@@ -121,18 +210,6 @@ function SaveThemSettings({ closePluginSettings }: { closePluginSettings: () => 
             }
         });
     }, []);
-
-    // DM user
-    const handleDMUser = async (userId: string) => {
-        try {
-            closePluginSettings();
-            await ChannelActionCreators.openPrivateChannel({ recipientIds: [userId] });
-        } catch (err) {
-            logger.error("Failed to open DM", err);
-            showToast(t("Could not open DM with this user."), Toasts.Type.FAILURE);
-        }
-    };
-
     // Copy User ID
     const handleCopyId = (userId: string) => {
         copyToClipboard(userId);
@@ -177,31 +254,13 @@ function SaveThemSettings({ closePluginSettings }: { closePluginSettings: () => 
             ) : (
                 <div className="vc-savethem-grid">
                     {users.map(u => (
-                        <div className="vc-savethem-card" key={u.id}>
-                            <div className="vc-savethem-profile-row">
-                                <img
-                                    className="vc-savethem-avatar"
-                                    src={u.avatarDataUrl ?? IconUtils.getDefaultAvatarURL(u.id)}
-                                    alt=""
-                                    draggable={false}
-                                />
-                                <div className="vc-savethem-user-info">
-                                    <span className="vc-savethem-name">{u.globalName}</span>
-                                    <span className="vc-savethem-username">@{u.username}</span>
-                                </div>
-                            </div>
-
-                            <div className="vc-savethem-reason-container">
-                                <span className="vc-savethem-reason-label">{t("Saved Note / Reason")}</span>
-                                <span>{u.reason}</span>
-                            </div>
-
-                            <div className="vc-savethem-actions">
-                                <Button size="small" onClick={() => handleDMUser(u.id)}>{t("DM")}</Button>
-                                <Button size="small" color="PRIMARY" onClick={() => handleCopyId(u.id)}>{t("Copy ID")}</Button>
-                                <Button size="small" color="RED" onClick={() => handleRemoveUser(u.id, u.globalName)}>{t("Remove")}</Button>
-                            </div>
-                        </div>
+                        <SaveThemCard 
+                            key={u.id} 
+                            u={u} 
+                            closePluginSettings={closePluginSettings} 
+                            handleRemoveUser={handleRemoveUser} 
+                            handleCopyId={handleCopyId}
+                        />
                     ))}
                 </div>
             )}
@@ -241,7 +300,8 @@ export const settings = definePluginSettings({
 export default definePlugin({
     name: "SaveThem",
     description: "Allows you to save users with profile backups and a reason, directly from context menus.",
-    authors: [{ name: "irritably", id: 928787166916640838n }],
+    authors: [{ name: "irritably",
+     id: 928787166916640838n }],
     tags: ["Utility", "Chat"],
     contextMenus: {
         "user-context": UserContextMenuPatch

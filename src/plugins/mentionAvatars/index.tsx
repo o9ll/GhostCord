@@ -50,7 +50,6 @@ export default definePlugin({
     description: "Shows user avatars and role icons inside mentions",
     tags: ["Appearance", "Customisation"],
     authors: [Devs.Ven, Devs.SerStars],
-    enabledByDefault: true,
     patches: [{
         // HEY THOR UPDATE SHOW ME YOUR NAME IF THIS SHIT CHANGES TY :)
         find: ".USER_MENTION)",

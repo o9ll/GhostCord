@@ -12,7 +12,6 @@ export default definePlugin({
     description: "Bypasses the push-to-talk requirement for voice activity in channels that enforce it.",
     tags: ["Servers", "Voice"],
     authors: [EquicordDevs.omaw],
-    enabledByDefault: true,
     patches: [
         {
             find: "PermissionVADStore",

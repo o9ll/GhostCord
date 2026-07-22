@@ -305,8 +305,10 @@ const uploadEmojis = async () => {
     } else {
         const [file] = await DiscordNative.fileManager.openFiles({
             filters: [
-                { name: "Whitelisted Emojis", extensions: ["json"] },
-                { name: "all", extensions: ["*"] }
+                { name: "Whitelisted Emojis",
+     extensions: ["json"] },
+                { name: "all",
+     extensions: ["*"] }
             ]
         });
         if (!file) return;

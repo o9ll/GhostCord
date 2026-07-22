@@ -325,7 +325,8 @@ export default definePlugin({
     name: "FakeSwitcher",
     enabledByDefault: true,
     description: "Right-click → add a user to the switcher. Click in the switcher → your profile takes their appearance locally.",
-    authors: [{ name: "Ghostcord", id: 0n }],
+    authors: [{ name: "Ghostcord",
+     id: 0n }],
     dependencies: ["HeaderBarAPI"],
 
     async start() {

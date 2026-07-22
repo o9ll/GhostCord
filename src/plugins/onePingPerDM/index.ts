@@ -51,7 +51,6 @@ export default definePlugin({
     tags: ["Notifications", "Customisation"],
     authors: [Devs.ProffDea],
     isModified: true,
-    enabledByDefault: true,
     settings,
     patches: [
         {

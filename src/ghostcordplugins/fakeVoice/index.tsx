@@ -158,10 +158,11 @@ function FakeDeafenUserButton({ iconForeground, hideTooltips, nameplate }: UserA
 
 export default definePlugin({
     name: "FakeVoice",
-    description: "Appear muted or deaf while listening. By mushzi.",
-    authors: [{ name: "mushzi", id: 449282863582412850n }],
-    dependencies: ["CommandsAPI", "UserAreaAPI"],
     enabledByDefault: true,
+    description: "Appear muted or deaf while listening. By mushzi.",
+    authors: [{ name: "mushzi",
+     id: 449282863582412850n }],
+    dependencies: ["CommandsAPI", "UserAreaAPI"],
 
     start() {
         // Re-assert our fake state whenever Discord internally updates voice state

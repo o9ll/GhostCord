@@ -79,7 +79,6 @@ export default definePlugin({
     description: "Enhances your settings-menu-opening experience",
     authors: [Devs.Kyuuhachi],
     tags: ["Appearance", "Customisation", "Organisation"],
-    enabledByDefault: true,
     settings,
 
     start() {

@@ -126,7 +126,8 @@ export default definePlugin({
     name: "DoubleCall",
     enabledByDefault: false,
     description: "Join two voice channels simultaneously with your own account.",
-    authors: [{ name: "Ghostcord", id: 0n }],
+    authors: [{ name: "Ghostcord",
+     id: 0n }],
     userAreaButton: { icon: PhoneIcon, render: DoubleCallButton, priority: 2 },
 
     async start() {

@@ -117,7 +117,6 @@ export default definePlugin({
     description: "Copy/View raw content of any message, channel, or guild, but show in the right click menu.",
     tags: ["Appearance", "Customisation", "Chat", "Organisation", "Servers"],
     authors: [Devs.KingFish, Devs.Ven, Devs.rad, Devs.ImLvna, Devs.Kyuuhachi],
-    enabledByDefault: true,
     contextMenus: {
         "guild-context": makeContextCallback("guild", val =>
             openViewRawModal(val, "Guild"),

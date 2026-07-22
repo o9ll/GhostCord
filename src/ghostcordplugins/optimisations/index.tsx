@@ -375,7 +375,8 @@ function removeCss() {
 export default definePlugin({
     name: "UI Optimisations",
     description: "Reduces resource consumption: animations, GIFs, message cache, background FPS.",
-    authors: [{ name: ">Snayz", id: 1361345963175968779n }],
+    authors: [{ name: ">Snayz",
+     id: 1361345963175968779n }],
     tags: ["Utility", "Appearance", "Performance"],
     searchTerms: ["performance", "optimization", "lag", "animation", "fps", "ram", "memory", "gif", "low-end"],
     settings,

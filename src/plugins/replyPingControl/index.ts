@@ -34,7 +34,6 @@ export default definePlugin({
     description: "Control whether to always or never get pinged on message replies, with whitelist and blacklist features",
     tags: ["Chat", "Notifications"],
     authors: [Devs.ant0n, EquicordDevs.MrDiamond, EquicordDevs.keircn],
-    enabledByDefault: true,
     settings,
 
     patches: [{

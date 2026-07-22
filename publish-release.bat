@@ -1,6 +1,6 @@
 @echo off
 :: ─── Ghostcord — Publish a new release to GitHub ──────────────────────────────
-:: Usage: publish-release.bat 1.21.7 "Release v1.21.7"
+:: Usage: publish-release.bat 1.21.8 "Release v1.21.8"
 :: Requires: gh (GitHub CLI) — https://cli.github.com
 ::           pnpm, node, dotnet SDK (or .NET Framework 4.x)
 
@@ -11,7 +11,8 @@ set "NOTES=%~2"
 
 if "%VERSION%"=="" (
     echo [ERROR] Usage: publish-release.bat VERSION "Notes"
-    echo Example: publish-release.bat 1.21.7 "Fixed"
+    echo Example: publish-release.bat 1.21.8 "Fixed"
+    echo Command: .\publish-release.bat 1.21.8 "Ghostcord v1.21.8"
     pause
     exit /b 1
 )

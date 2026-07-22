@@ -739,7 +739,8 @@ export default definePlugin({
     name: "GhostcordAI",
     enabledByDefault: true,
     description: "AI Chat (Groq) integrated in Discord. Replaces 'Shop' in the DM panel.",
-    authors: [{ name: "Ghostcord", id: 0n }],
+    authors: [{ name: "Ghostcord",
+     id: 0n }],
     settings,
 
     settingsAboutComponent() {

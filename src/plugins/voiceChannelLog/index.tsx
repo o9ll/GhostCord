@@ -57,7 +57,6 @@ export default definePlugin({
     tags: ["Servers", "Utility", "Voice"],
     authors: [Devs.Sqaaakoi, Devs.thororen, EquicordDevs.nyx, Devs.Moxxie, EquicordDevs.Fres, Devs.amy],
     dependencies: ["AudioPlayerAPI", "HeaderBarAPI"],
-    enabledByDefault: true,
     settings,
     contextMenus: {
         "channel-context": patchChannelContextMenu

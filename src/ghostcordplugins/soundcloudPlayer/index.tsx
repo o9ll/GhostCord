@@ -1106,12 +1106,13 @@ export const settings = definePluginSettings({
 });
 
 export default definePlugin({
+
     name: "SoundCordPlayer",
     enabledByDefault: true,
     description: "Integrated SoundCord player. Client ID is automatically fetched via native Electron process — no account required.",
     authors: [EquicordDevs.nobody],
     settings,
-    
+
     toolboxActions: {
         "Open SoundCord"() {
             openModal(props => (

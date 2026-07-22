@@ -863,7 +863,8 @@ export const SafeDynamicIsland = ErrorBoundary.wrap(DynamicIslandPortal, { noop:
 export default definePlugin({
     name: "DynamicIslande",
     description: "Adds a Dynamic Island for Spotify, SoundCord, calls, screen sharing, and notifications.",
-    authors: [{ name: "irritably", id: 928787166916640838n }],
+    authors: [{ name: "irritably",
+     id: 928787166916640838n }],
     tags: ["Media", "Voice"],
     dependencies: ["HeaderBarAPI", "MusicControls"],
     settings,

@@ -4,15 +4,28 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-import { mkdirSync, readFileSync, writeFileSync } from "fs";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { dirname, join } from "path";
 import type { Settings as TSettings, State as TState } from "shared/settings";
 import { SettingsStore } from "shared/utils/SettingsStore";
 
 import { DATA_DIR, VENCORD_SETTINGS_FILE } from "./constants";
 
-const SETTINGS_FILE = join(DATA_DIR, "settings.json");
+const SETTINGS_FILE = VENCORD_SETTINGS_FILE;
+const LEGACY_SETTINGS_FILE = join(DATA_DIR, "settings.json");
 const STATE_FILE = join(DATA_DIR, "state.json");
+
+// Migration: If legacy DATA_DIR/settings.json exists, copy it to VENCORD_SETTINGS_FILE
+try {
+    if (existsSync(LEGACY_SETTINGS_FILE)) {
+        if (!existsSync(SETTINGS_FILE)) {
+            mkdirSync(dirname(SETTINGS_FILE), { recursive: true });
+            copyFileSync(LEGACY_SETTINGS_FILE, SETTINGS_FILE);
+        }
+    }
+} catch (e) {
+    console.error("Failed to migrate legacy settings.json:", e);
+}
 
 function loadSettings<T extends object = any>(file: string, name: string) {
     let settings = {} as T;

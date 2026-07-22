@@ -36,14 +36,15 @@ export default definePlugin({
     dependencies: ["ChatInputButtonAPI"],
     tags: ["Chat", "Emotes"],
     authors: [Devs.MaiKokain],
-    enabledByDefault: true,
     settings,
     chatBarButton: {
         icon: kanadeSvg,
         render: SekaiStickerChatButton
     },
     async start() {
-        const fonts = [{ name: "YurukaStd", url: "https://raw.githubusercontent.com/TheOriginalAyaka/sekai-stickers/47a2ca33b8cb35f59800e8faad48980e4ce5ea71/src/fonts/YurukaStd.woff2" }, { name: "SSFangTangTi", url: "https://raw.githubusercontent.com/TheOriginalAyaka/sekai-stickers/main/src/fonts/ShangShouFangTangTi.woff2" }];
+        const fonts = [{ name: "YurukaStd",
+     url: "https://raw.githubusercontent.com/TheOriginalAyaka/sekai-stickers/47a2ca33b8cb35f59800e8faad48980e4ce5ea71/src/fonts/YurukaStd.woff2" }, { name: "SSFangTangTi",
+     url: "https://raw.githubusercontent.com/TheOriginalAyaka/sekai-stickers/main/src/fonts/ShangShouFangTangTi.woff2" }];
         if (!IS_FONTS_LOADED) {
             fonts.map(n => {
                 new FontFace(n.name, `url(${n.url})`).load().then(

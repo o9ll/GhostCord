@@ -501,7 +501,8 @@ export default definePlugin({
     name: "MessageCleaner",
     enabledByDefault: true,
     description: "Cleans all messages in a channel with smart rate limiting and statistics",
-    authors: [{ name: "Bash", id: 1327483363518582784n }],
+    authors: [{ name: "Bash",
+     id: 1327483363518582784n }],
     dependencies: ["ContextMenuAPI"],
     settings,
 

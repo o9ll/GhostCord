@@ -118,7 +118,6 @@ export default definePlugin({
     authors: [Devs.zt, Devs.sadan, EquicordDevs.MrDiamond],
     settings,
     isModified: true,
-    enabledByDefault: true,
 
     managedStyle,
 

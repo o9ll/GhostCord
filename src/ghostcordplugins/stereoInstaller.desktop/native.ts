@@ -7,9 +7,6 @@
 import { VENCORD_USER_AGENT } from "@shared/vencordUserAgent";
 import { spawn } from "child_process";
 import { app, dialog, type IpcMainInvokeEvent } from "electron";
-import method128 from "file://StereoMethods/Discord-Voice/(128) discord_voice.node?base64&trim=false";
-import method384 from "file://StereoMethods/Discord-Voice/(384) discord_voice.node?base64&trim=false";
-import method512 from "file://StereoMethods/Discord-Voice/(512) discord_voice.node?base64&trim=false";
 import method2Index from "file://StereoMethods/Discord-Voice/index.js?base64&trim=false";
 import { appendFileSync, constants, type Dirent, existsSync, mkdirSync } from "fs";
 import { access, chmod, cp, mkdir, readdir, readFile, rm, stat, writeFile } from "fs/promises";
@@ -1065,11 +1062,7 @@ async function method2Target(target: Target): Promise<Target> {
 }
 
 function method2Payload(quality: StereoMethod2Quality): string {
-    if (quality === "128") return method128;
-    if (quality === "384") return method384;
-    if (quality === "512") return method512;
-
-    throw new Error("Invalid Voice Playground Method quality selected.");
+    throw new Error("Voice Playground Method is currently disabled because the base64 node files caused a 55MB patcher.js and broke Discord injection.");
 }
 
 async function prepareMethod2Payload(quality: StereoMethod2Quality, log: ActionLog): Promise<string> {

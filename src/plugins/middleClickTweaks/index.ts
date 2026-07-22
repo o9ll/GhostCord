@@ -79,7 +79,6 @@ export default definePlugin({
     name: "MiddleClickTweaks",
     description: "Various middle click tweaks, such as with pasting and link opening.",
     authors: [EquicordDevs.Etorix, EquicordDevs.korzi],
-    enabledByDefault: true,
     settings,
 
     tags: ["Utility"],

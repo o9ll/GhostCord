@@ -395,10 +395,11 @@ export const translations: TranslationMap = {
 
 export default definePlugin({
     name: "AutoTranslateGhostcord",
+    enabledByDefault: true,
     required: true,
-    enabledByDefault: false,
     description: "Automatic translation for Ghostcord.",
-    authors: [{ name: "Trigger", id: 0n }],
+    authors: [{ name: "Trigger",
+     id: 0n }],
     options: {
         autoTranslate: {
             description: "Automatically translate strings",

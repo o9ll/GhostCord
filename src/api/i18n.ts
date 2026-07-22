@@ -10,20 +10,27 @@ export type Language = "en" | "ar" | "fr" | "es" | "ru" | "zh";
 
 export const LANGUAGES: Record<Language, string> = {
     en: "English",
-    ar: "Arabic",
-    fr: "Français",
-    es: "Español",
-    ru: "Русский",
-    zh: "Chinese",
+    ar: "Saudi",
+    fr: "France",
+    es: "Spain",
+    ru: "Russia",
+    zh: "China",
 };
 
-export const LANGUAGE_FLAGS: Record<Language, string> = {
-    en: "🇬🇧",
-    ar: "🇸🇦",
-    fr: "🇫🇷",
-    es: "🇪🇸",
-    ru: "🇷🇺",
-    zh: "🇨🇳",
+export const GB_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAAAwBAMAAABTZWEsAAAAElBMVEXl1d7//f4DIWnLGTTeeoVYaZc+sT+nAAABfklEQVR4nOVUQW7EIAycbZL7Wmrv1UrcVyIPSLV9AELi/1+pDTaG3Uj7gM4hSsjgGYxt3Imu+dYQKDKofyLGO/YL0ddI2DsBa4wXRGFsZxES/z8I8jCRiRDwkM1YhhAjIaSFBYggPFLG6OF7bbGRBpEhggrQhuaV3/JE6Ksw7nUbCR4XrpbdQxe4CeGW7CQ9gp5AnGM0ZIS0unHUnKliaYTirpRgntE8DOcygonQQyJM6UfIjJI+9/2HCVVi2WtuSwi5BCg45xcjtNf+Z0L1MAEzxMPT0u8EkZhXEN/gvxDeJmpGfE31fDW1Hk4vi6SJYLd5rfffUCqS7H4crR6IpHy29kdLjiuECxFGYKkdWnJtFHBULkQlQL+c8M01LntK81A0Xi97FTg+euNQ22CN0wTuY+vZSiU4vxMsZm3e4Io+YcwVt39I7tnnQ1/NGA2NI8jiwtXmKZc0XVC/+WXS6kngAs+D1NK/xv04H8XVHTzrL9O+MngUR+TzaS8iyx/xQt+2hOnvLAAAAABJRU5ErkJggg==";
+export const SA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAAAwAgMAAADcJZSMAAAACVBMVEUDbDaGppDf5uElK3hHAAABFklEQVR4nN3QvWrDMBAHcLvgDJ3akkDtsbSB5CmcQjJ0siE2WLMsKj9Fu2joFIdaIE0tSMK6pyw525RmLhT6n44fd/q4IPjbpN9lXmTzrFPb6yjfItwpGhcAku2cQCidiUmlbSMAToMhcYaRW/nJNm4Ea1uIrWUbKxG8t7UD75jkAgHAzEv5Tpc6OeLlZfccqQXnDyI5vpwgkqqB2K9Xr2QAosHryK+5VAPUAHvWmKXqlEN47HzGAOr+UHmEWd4XEoD2bQUIT2VPhADKdYUjIQHaEJ3dr7QvEaraeg4xdZXdIWjQYJK3XWtuCD5d+EVyCNPL9OPCn+8xC/5L0qmIiiHd9LcZjDFTy9gB/c8jwnMIrvbB7+QLtdZ25XrfVH8AAAAASUVORK5CYII=";
+export const FR_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAAAwAgMAAADcJZSMAAAADFBMVEX///8BJlTPFCjAydQdBUYDAAAAIUlEQVR4nO3IOREAAAjAsJrk8IhKnh0HzRhiJKsOhmF80X86D2CrBVtnAAAAAElFTkSuQmCC";
+export const ES_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAAAwBAMAAABTZWEsAAAAElBMVEX+7ATkARvbaSfIp0DQu7JKZn9eqfkNAAAAv0lEQVR4nO3UwQ3DIAwFUFRngVAGAEPu5JsBooQJqmb/VUrVs0lV9dIqvvIkWx+DGQ/KnOBbgA/KvF+5f0wi0iU5C1EPIAQbeyAAfNWPxQACT+oUkgkccwcYCW7rAKKW2Vp0MLQYUqjDooEintKYRAPEsydrHWtJUIKXPbmyai2qj9OeItQZ5szTHnHxWgtnwA2Quh71uViCYVNzaEAYeg7UAJh7l4V4i1YFVBcq95CLOsOrzYd1+HD+43/4BfAAXUVPY9z91ukAAAAASUVORK5CYII=";
+export const RU_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAAAwAgMAAADcJZSMAAAACVBMVEXs7O3BGA0VJpMhEoUIAAAAHklEQVR4nO3IMQEAAAABMCWVlNJNBXYOuKCyHizjYS20/wH3H1HZAAAAAElFTkSuQmCC";
+export const CN_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAAAwAgMAAADcJZSMAAAACVBMVEXuHCX1bRf/7wKnRW90AAAAa0lEQVR4nO3QIQ6AMAwF0L8EPGKQjNP0CAgwaLgPJFwBsZ6SybabAYXYd33JftMBHzNb2NTUWGiBSUGwBcG09utCqmTkqGHgCHi5hC9TyoeeXQZ3gk7CmVbsEsjbY1C4n959UAFc9qTmb3kAVQAQCanv2BgAAAAASUVORK5CYII=";
+
+	export const LANGUAGE_FLAGS: Record<Language, string> = {
+    en: GB_B64,
+    ar: SA_B64,
+    fr: FR_B64,
+    es: ES_B64,
+    ru: RU_B64,
+    zh: CN_B64,
 };
 
 // All Ghostcord UI strings. Key = English original, value = translations per language.
@@ -568,6 +575,27 @@ const translations: Record<string, Partial<Record<Language, string>>> = {
     "3 hours": { ar: "3 ساعات", fr: "3 heures", es: "3 horas", ru: "3 часа", zh: "3 小时" },
     "Inactivity timeout: stopped following {}": { ar: "مهلة الخمول: توقف عن متابعة {}", fr: "Suivi inactif — arrêt du suivi de {}", es: "Tiempo de inactividad: se dejó de seguir a {}", ru: "Время бездействия: прекращено отслеживание {}", zh: "无活动超时：已停止跟随 {}" },
     "Follows a user in voice channels. Right-click user → Follow User. White heart in header = active following (left-click = join voice channel, right-click = unfollow). Auto-unfollows after inactivity.": { ar: "يتابع مستخدمًا في القنوات الصوتية. انقر بزر الماوس الأيمن على المستخدم → متابعة المستخدم. قلب أبيض في العنوان = متابعة نشطة (نقر أيسر = الانضمام للقناة الصوتية، نقر أيمن = إلغاء المتابعة). إلغاء المتابعة التلقائي بعد الخمول.", fr: "Suit un utilisateur dans les salons vocaux. Clic droit → Suivre l'utilisateur. Cœur blanc = suivi actif (clic gauche = rejoindre, clic droit = ne plus suivre). Arrêt automatique après inactivité.", es: "Sigue a un usuario en canales de voz. Clic derecho → Seguir usuario. Corazón blanco = seguimiento activo. Se deja de seguir automáticamente tras inactividad.", ru: "Следовать за пользователем в голосовых каналах. Автоматическое прекращение отслеживания при бездействии.", zh: "在语音频道中跟随用户。无活动后自动停止跟随。" },
+    "Keywords to filter (separated by commas)": { fr: "Mots-clés à filtrer (séparés par des virgules)", es: "Palabras clave para filtrar (separadas por comas)", ru: "Ключевые слова для фильтрации (через запятую)", zh: "要过滤的关键字（以逗号分隔）" },
+    "User IDs to ignore (separated by commas)": { fr: "IDs des utilisateurs à ignorer (séparés par des virgules)", es: "ID de usuario para ignorar (separados por comas)", ru: "ID пользователей для игнорирования (через запятую)", zh: "要忽略的用户 ID（以逗号分隔）" },
+    "Block @everyone and @here pings": { fr: "Bloquer les pings @everyone et @here", es: "Bloquear los pings de @everyone y @here", ru: "Блокировать пинги @everyone и @here", zh: "阻止 @everyone 和 @here 的 ping" },
+    "Blocking mode": { fr: "Mode de blocage", es: "Modo de bloqueo", ru: "Режим блокировки", zh: "拦截模式" },
+    "Silent (Keep red badge but mute sound)": { fr: "Silencieux (Garde la pastille rouge mais coupe le son)", es: "Silencioso (mantener insignia roja pero silenciar sonido)", ru: "Тихий (сохранить красный значок, но отключить звук)", zh: "静音（保留红色徽章但静音）" },
+    "Ghost (Completely remove the mention)": { fr: "Fantôme (Supprime complètement la mention)", es: "Fantasma (eliminar completamente la mención)", ru: "Призрак (полностью удалить упоминание)", zh: "幽灵（完全删除提及）" },
+    "Smartly filter pings by keywords or users.": { fr: "Filtrez intelligemment les pings par mots-clés ou par utilisateurs.", es: "Filtre inteligentemente los pings por palabras clave o usuarios.", ru: "Умная фильтрация пингов по ключевым словам или пользователям.", zh: "按关键字或用户智能过滤 ping。" },
+    "Why are you saving this user? (Add a note or reason)": { fr: "Pourquoi sauvegardez-vous cet utilisateur ? (Ajouter une note ou une raison)", es: "¿Por qué estás guardando a este usuario? (Añade una nota o razón)", ru: "Почему вы сохраняете этого пользователя? (Добавьте заметку или причину)", zh: "为什么要保存此用户？（添加备注或原因）" },
+    "e.g. Nice designer, Met in voice chat...": { fr: "ex : Bon designer, Rencontré en chat vocal...", es: "ej. Buen diseñador, Conocido en chat de voz...", ru: "напр. Хороший дизайнер, Встретились в голосовом чате...", zh: "例如：好设计师，在语音聊天中遇到..." },
+    "A reason is required to save a user.": { fr: "Une raison est requise pour sauvegarder un utilisateur.", es: "Se requiere una razón para guardar un usuario.", ru: "Для сохранения пользователя требуется причина.", zh: "保存用户需要原因。" },
+    "Failed to save user.": { fr: "Échec de la sauvegarde de l'utilisateur.", es: "Error al guardar el usuario.", ru: "Не удалось сохранить пользователя.", zh: "保存用户失败。" },
+    "Remove Saved User": { fr: "Supprimer l'utilisateur sauvegardé", es: "Eliminar usuario guardado", ru: "Удалить сохраненного пользователя", zh: "删除已保存的用户" },
+    "Save to SaveThem": { fr: "Sauvegarder dans SaveThem", es: "Guardar en SaveThem", ru: "Сохранить в SaveThem", zh: "保存到 SaveThem" },
+    "Saved Note / Reason": { fr: "Note / Raison sauvegardée", es: "Nota / Razón guardada", ru: "Сохраненная заметка / Причина", zh: "保存的备注/原因" },
+    "No saved contacts yet": { fr: "Aucun contact sauvegardé pour le moment", es: "No hay contactos guardados todavía", ru: "Пока нет сохраненных контактов", zh: "还没有保存的联系人" },
+    "Right-click on any user in chat or member list, then click \"Save to SaveThem\".": { fr: "Faites un clic droit sur n'importe quel utilisateur dans le chat ou la liste des membres, puis cliquez sur \"Sauvegarder dans SaveThem\".", es: "Haz clic derecho en cualquier usuario en el chat o lista de miembros, luego haz clic en \"Guardar en SaveThem\".", ru: "Щелкните правой кнопкой мыши любого пользователя в чате или списке участников, затем нажмите \"Сохранить в SaveThem\".", zh: "右键单击聊天或成员列表中的任何用户，然后单击“保存到 SaveThem”。" },
+    "SaveThem - Saved Contacts": { fr: "SaveThem - Contacts Sauvegardés", es: "SaveThem - Contactos Guardados", ru: "SaveThem - Сохраненные контакты", zh: "SaveThem - 已保存的联系人" },
+    "User removed from list.": { fr: "Utilisateur retiré de la liste.", es: "Usuario eliminado de la lista.", ru: "Пользователь удален из списка.", zh: "用户已从列表中删除。" },
+    "User ID copied to clipboard!": { fr: "ID de l'utilisateur copié dans le presse-papiers !", es: "¡ID de usuario copiado al portapapeles!", ru: "ID пользователя скопирован в буфер обмена!", zh: "用户 ID 已复制到剪贴板！" },
+    "Allows you to save users with profile backups and a reason, directly from context menus.": { fr: "Vous permet de sauvegarder des utilisateurs avec des sauvegardes de profil et une raison, directement depuis les menus contextuels.", es: "Permite guardar usuarios con copias de seguridad de perfil y una razón, directamente desde los menús contextuales.", ru: "Позволяет сохранять пользователей с резервными копиями профиля и причиной прямо из контекстного меню.", zh: "允许您直接从上下文菜单保存用户以及配置文件备份和原因。" },
+    "Log in to like": { fr: "Connectez-vous pour aimer", es: "Inicia sesión para dar me gusta", ru: "Войдите, чтобы поставить лайк", zh: "登录即可点赞" },
 };
 
 /**

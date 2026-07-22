@@ -26,7 +26,6 @@ export default definePlugin({
     description: "Force the owner crown next to usernames even if the server is large.",
     authors: [Devs.D3SOX, Devs.Nickyux],
     tags: ["Roles", "Appearance", "Servers"],
-    enabledByDefault: true,
     patches: [
         {
             find: "#{intl::GUILD_OWNER}),children:",

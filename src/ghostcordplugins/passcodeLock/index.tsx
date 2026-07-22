@@ -81,9 +81,11 @@ const buf2hex = (buf: ArrayBuffer) => Array.prototype.map.call(new Uint8Array(bu
 async function pbkdf2(str: string, salt: string, iterations: number) {
     const key = await crypto.subtle.importKey("raw", str2binb(str), { name: "PBKDF2" }, false, ["deriveKey"]);
     const derived = await crypto.subtle.deriveKey(
-        { name: "PBKDF2", salt: b64binb(salt), iterations, hash: { name: "SHA-1" } },
+        { name: "PBKDF2",
+     salt: b64binb(salt), iterations, hash: { name: "SHA-1" } },
         key,
-        { name: "HMAC", hash: "SHA-1", length: 160 },
+        { name: "HMAC",
+     hash: "SHA-1", length: 160 },
         true,
         ["sign", "verify"],
     );
@@ -705,7 +707,8 @@ function parseKeybind(str: string) {
 export default definePlugin({
     name: "PasscodeLock",
     description: "Protect Discord with a passcode.",
-    authors: [{ name: "arg0NNY (ported by Ghostcord)", id: 0n }],
+    authors: [{ name: "arg0NNY (ported by Ghostcord)",
+     id: 0n }],
     settings,
 
     headerBarButton: {

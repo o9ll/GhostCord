@@ -29,7 +29,8 @@ const handleVoiceChannelSelect = () => {
 export default definePlugin({
     name: "FixScreenshare",
     description: "Fixes infinite loading and crashes on screenshare after reload (Ctrl+R) by forcing module re-initialization.",
-    authors: [{ name: "Ghostcord", id: 0n }],
+    authors: [{ name: "Ghostcord",
+     id: 0n }],
     required: true,
 
     start() {

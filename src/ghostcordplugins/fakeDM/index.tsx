@@ -76,14 +76,28 @@ function registerFake(channelId: string, id: string) {
 }
 
 function clearFakes(channelId: string): number {
-    const ids = fakeIds.get(channelId);
-    if (!ids?.size) return 0;
+    const ids = fakeIds.get(channelId) || new Set<string>();
+    const fakes = loadPersisted().filter(f => f.channelId === channelId);
     let n = 0;
-    for (const id of ids) {
-        FluxDispatcher.dispatch({ type: "MESSAGE_DELETE", channelId, id, mlDeleted: true });
+    
+    // Dispatch delete for all fakes of this channel to clear from store immediately
+    for (const f of fakes) {
+        FluxDispatcher.dispatch({ type: "MESSAGE_DELETE", channelId, id: f.snowflakeId, mlDeleted: true });
         n++;
     }
-    removePersisted(channelId, ids);
+    
+    // Also dispatch delete for any session-only fakes that might not be in persisted storage
+    for (const id of ids) {
+        if (!fakes.some(f => f.snowflakeId === id)) {
+            FluxDispatcher.dispatch({ type: "MESSAGE_DELETE", channelId, id, mlDeleted: true });
+            n++;
+        }
+    }
+
+    // Remove from persisted storage
+    const remaining = loadPersisted().filter(f => f.channelId !== channelId);
+    savePersisted(remaining);
+    
     ids.clear();
     return n;
 }
@@ -260,55 +274,115 @@ function injectCall(
     }
 }
 
-// ─── Restore persisted fakes on startup ──────────────────────────────────────
-let _restoreHandler: (() => void) | null = null;
+// ─── Restore persisted fakes on startup / message load / channel select ───────
+function loadMessagesSuccessHandler(payload: any) {
+    try {
+        const messages = payload.messages;
+        if (!Array.isArray(messages) || messages.length === 0) return;
 
-function scheduleRestore() {
-    _restoreHandler = () => {
-        FluxDispatcher.unsubscribe("CONNECTION_OPEN", _restoreHandler!);
-        _restoreHandler = null;
-        setTimeout(doRestore, 1200);
-    };
-    FluxDispatcher.subscribe("CONNECTION_OPEN", _restoreHandler);
-}
+        const channelId = payload.channelId;
+        if (!channelId) return;
 
-function doRestoreForChannel(channelId: string) {
-    const fakes = loadPersisted().filter(f => f.channelId === channelId);
-    if (!fakes.length) return;
+        const fakes = loadPersisted().filter(f => f.channelId === channelId);
+        if (!fakes.length) return;
 
-    for (const f of fakes) {
-        if (MessageStore.getMessage(channelId, f.snowflakeId)) continue;
+        const newestMsg = messages[0];
+        const oldestMsg = messages[messages.length - 1];
 
-        if (f.type === "message") {
-            const author = UserStore.getUser(f.authorId);
-            if (!author) continue;
-            inject(f.channelId, author, f.content, new Date(f.timestamp), f.snowflakeId);
-        } else {
-            const caller = UserStore.getUser(f.callerId);
-            const other = UserStore.getUser(f.otherId);
-            if (!caller || !other) continue;
-            injectCall(
-                f.channelId, caller, other,
-                f.missed, f.durationSec,
-                new Date(f.timestamp),
-                f.snowflakeId,
-                f.endedTimestamp
-            );
+        const DISCORD_EPOCH = 14200704e5;
+        const getTime = (id: string) => (parseInt(id) / 4194304) + DISCORD_EPOCH;
+
+        const oldestTs = getTime(oldestMsg.id);
+        const newestTs = getTime(newestMsg.id);
+
+        const existingIds = new Set(messages.map((m: any) => m.id));
+
+        const toInject = fakes.filter(f => {
+            const fakeTs = new Date(f.timestamp).getTime();
+            return fakeTs >= oldestTs && fakeTs <= newestTs && !existingIds.has(f.snowflakeId);
+        });
+
+        for (const f of toInject) {
+            let authorObj;
+            if (f.type === "message") {
+                const author = UserStore.getUser(f.authorId) || { id: f.authorId, username: "Unknown User" };
+                authorObj = buildAuthor(author);
+            } else {
+                const caller = UserStore.getUser(f.callerId) || { id: f.callerId, username: "Unknown User" };
+                authorObj = buildAuthor(caller);
+            }
+
+            const msgObj: any = {
+                attachments: [],
+                components: [],
+                embeds: [],
+                mention_roles: [],
+                mentions: [],
+                author: authorObj,
+                channel_id: channelId,
+                content: f.type === "message" ? (f as PersistedMessage).content : "",
+                edited_timestamp: null,
+                flags: 0,
+                id: f.snowflakeId,
+                mention_everyone: false,
+                nonce: f.snowflakeId,
+                pinned: false,
+                timestamp: f.timestamp,
+                tts: false,
+                type: f.type === "message" ? 0 : 3,
+            };
+
+            if (f.type === "call") {
+                const caller = UserStore.getUser(f.callerId) || { id: f.callerId, username: "Unknown User" };
+                const other = UserStore.getUser((f as PersistedCall).otherId) || { id: (f as PersistedCall).otherId, username: "Unknown User" };
+                msgObj.call = {
+                    participants: f.missed ? [caller.id] : [caller.id, other.id],
+                    ended_timestamp: (f as PersistedCall).endedTimestamp,
+                    duration: f.missed ? undefined : (f as PersistedCall).durationSec,
+                };
+            }
+
+            // Register in fakeIds so clear works
+            registerFake(channelId, f.snowflakeId);
+
+            const deletedTime = getTime(f.snowflakeId);
+            let insertAt = messages.findIndex((m: any) => getTime(m.id) < deletedTime);
+            if (insertAt === -1) insertAt = messages.length;
+            messages.splice(insertAt, 0, msgObj);
         }
+    } catch (e) {
+        console.error("loadMessagesSuccessHandler failed in FakeDM", e);
     }
 }
 
-function doRestore() {
-    const channelId = SelectedChannelStore.getChannelId();
-    if (channelId) doRestoreForChannel(channelId);
-}
-
-function handleLoadMessages(e: any) {
-    if (e.channelId) setTimeout(() => doRestoreForChannel(e.channelId), 50);
-}
-
 function handleChannelSelect(e: any) {
-    if (e.channelId) setTimeout(() => doRestoreForChannel(e.channelId), 400);
+    if (!e.channelId) return;
+    const fakes = loadPersisted().filter(f => f.channelId === e.channelId);
+    if (!fakes.length) return;
+
+    // Use a slight timeout so MessageStore is ready
+    setTimeout(() => {
+        for (const f of fakes) {
+            if (MessageStore.getMessage(e.channelId, f.snowflakeId)) continue;
+
+            if (f.type === "message") {
+                const author = UserStore.getUser(f.authorId);
+                if (!author) continue;
+                inject(f.channelId, author, f.content, new Date(f.timestamp), f.snowflakeId);
+            } else {
+                const caller = UserStore.getUser(f.callerId);
+                const other = UserStore.getUser((f as PersistedCall).otherId);
+                if (!caller || !other) continue;
+                injectCall(
+                    f.channelId, caller, other,
+                    f.missed, (f as PersistedCall).durationSec,
+                    new Date(f.timestamp),
+                    f.snowflakeId,
+                    (f as PersistedCall).endedTimestamp
+                );
+            }
+        }
+    }, 100);
 }
 
 // ─── Date helpers ─────────────────────────────────────────────────────────────
@@ -599,7 +673,8 @@ export default definePlugin({
     name: "FakeDM",
     enabledByDefault: true,
     description: "Injects fake local messages into a DM or group DM. Button in the text bar. Persists across restarts.",
-    authors: [{ name: "Ghostcord", id: 0n }],
+    authors: [{ name: "Ghostcord",
+     id: 0n }],
     dependencies: ["ChatInputButtonAPI"],
 
     chatBarButton: {
@@ -608,17 +683,12 @@ export default definePlugin({
     },
 
     start() {
-        scheduleRestore();
-        FluxDispatcher.subscribe("LOAD_MESSAGES_SUCCESS", handleLoadMessages);
+        FluxDispatcher.subscribe("LOAD_MESSAGES_SUCCESS", loadMessagesSuccessHandler);
         FluxDispatcher.subscribe("CHANNEL_SELECT", handleChannelSelect);
     },
 
     stop() {
-        if (_restoreHandler) {
-            FluxDispatcher.unsubscribe("CONNECTION_OPEN", _restoreHandler);
-            _restoreHandler = null;
-        }
-        FluxDispatcher.unsubscribe("LOAD_MESSAGES_SUCCESS", handleLoadMessages);
+        FluxDispatcher.unsubscribe("LOAD_MESSAGES_SUCCESS", loadMessagesSuccessHandler);
         FluxDispatcher.unsubscribe("CHANNEL_SELECT", handleChannelSelect);
         fakeIds.clear();
         _idCounter = 0;

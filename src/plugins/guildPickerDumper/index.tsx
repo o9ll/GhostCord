@@ -97,7 +97,6 @@ export default definePlugin({
     description: "Context menu to dump and download a server's emojis and stickers.",
     tags: ["Emotes", "Servers", "Utility"],
     authors: [EquicordDevs.Cortex, Devs.Samwich, EquicordDevs.Synth, Devs.thororen],
-    enabledByDefault: true,
     contextMenus: {
         "guild-context": Patch,
         "guild-header-popout": Patch

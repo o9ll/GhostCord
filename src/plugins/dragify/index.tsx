@@ -151,7 +151,6 @@ export default definePlugin({
     description: "Drop users, channels, or servers into chat to insert mentions or invites.",
     tags: ["Chat", "Servers", "Utility", "Voice"],
     authors: [EquicordDevs.justjxke],
-    enabledByDefault: true,
     settings,
 
     patches: [

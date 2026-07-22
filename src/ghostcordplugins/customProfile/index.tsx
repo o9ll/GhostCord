@@ -154,29 +154,102 @@ function getProfileEffectUrl(assetId: string, animated = false): string {
 }
 
 function getGiftingBadgeDesc(type: string): string {
-    const lang = document.documentElement.lang || "en-US";
-    const isFr = lang.startsWith("fr");
+    const isFr = getDiscordLocale().toLowerCase().startsWith("fr");
     switch (type) {
-        case "icon": return isFr ? "Plaisir d'offrir Icon" : "Gifting Icon";
-        case "patron": return isFr ? "Plaisir d'offrir Mécène" : "Gifting Patron";
-        case "champion": return isFr ? "Plaisir d'offrir Virtuose" : "Gifting Champion";
-        case "luminary": return isFr ? "Plaisir d'offrir Sommité" : "Gifting Luminary";
-        case "hero": return isFr ? "Plaisir d'offrir Idole" : "Gifting Hero";
-        case "legend": return isFr ? "Plaisir d'offrir Légende" : "Gifting Legend";
+        case "icon": return isFr ? "Icone de cadeaux" : "Gifting Icon";
+        case "patron": return isFr ? "Mécène de cadeaux" : "Gifting Patron";
+        case "champion": return isFr ? "Champion de cadeaux" : "Gifting Champion";
+        case "luminary": return isFr ? "Luminaire de cadeaux" : "Gifting Luminary";
+        case "hero": return isFr ? "Héros de cadeaux" : "Gifting Hero";
+        case "legend": return isFr ? "Légende de cadeaux" : "Gifting Legend";
         default: return "";
     }
 }
 
 function getLevelBadgeDesc(level: number): string {
-    const lang = document.documentElement.lang || "en-US";
-    return lang.startsWith("fr") ? `Niveau ${level} atteint` : `Level ${level} Reached`;
+    const isFr = getDiscordLocale().toLowerCase().startsWith("fr");
+    return isFr ? `Niveau ${level} atteint` : `Level ${level} Reached`;
+}
+
+function getLocalizedBadgeLabel(key: string): string {
+    const isFr = getDiscordLocale().toLowerCase().startsWith("fr");
+    if (!isFr) {
+        switch (key) {
+            case "Badges": return "BADGES";
+            case "Evolving Nitro Badge": return "EVOLVING NITRO BADGE";
+            case "Special Badges": return "SPECIAL BADGES";
+            case "Gifting Badges": return "GIFTING BADGES";
+            case "Server Boost Badges": return "SERVER BOOST BADGES";
+            case "None": return "None";
+            case "Staff Discord": return "Staff Discord";
+            case "Partnered Server Owner": return "Partnered Server Owner";
+            case "HypeSquad Events": return "HypeSquad Events";
+            case "Bug Hunter Lvl 1": return "Bug Hunter Lvl 1";
+            case "HypeSquad Bravery": return "HypeSquad Bravery";
+            case "HypeSquad Brilliance": return "HypeSquad Brilliance";
+            case "HypeSquad Balance": return "HypeSquad Balance";
+            case "Early Supporter": return "Early Supporter";
+            case "Former Moderator": return "Former Moderator";
+            case "Bug Hunter Lvl 2": return "Bug Hunter Lvl 2";
+            case "Early Verified Bot Developer": return "Early Verified Bot Developer";
+            case "Active Developer": return "Active Developer";
+            case "Completed a quest": return "Completed a quest";
+            case "Orbs — Apprentice": return "Orbs — Apprentice";
+            case "Old username": return "Old username";
+            case "Level Reached": return "Level Reached";
+            case "Gifting Icon": return "Gifting Icon";
+            case "Gifting Patron": return "Gifting Patron";
+            case "Gifting Champion": return "Gifting Champion";
+            case "Gifting Luminary": return "Gifting Luminary";
+            case "Gifting Hero": return "Gifting Hero";
+            case "Gifting Legend": return "Gifting Legend";
+            default: return key;
+        }
+    }
+
+    switch (key) {
+        case "Badges": return "BADGES";
+        case "Evolving Nitro Badge": return "BADGES NITRO ÉVOLUTIFS";
+        case "Special Badges": return "BADGES SPÉCIAUX";
+        case "Gifting Badges": return "BADGES DE CADEAUX";
+        case "Server Boost Badges": return "BADGES DE BOOST DE SERVEUR";
+        case "None": return "Aucun";
+
+        // Main Badges
+        case "Staff Discord": return "Personnel Discord";
+        case "Partnered Server Owner": return "Propriétaire d'un serveur partenaire";
+        case "HypeSquad Events": return "Événements HypeSquad";
+        case "Bug Hunter Lvl 1": return "Chasseur de bugs Nv. 1";
+        case "HypeSquad Bravery": return "HypeSquad Bravery";
+        case "HypeSquad Brilliance": return "HypeSquad Brilliance";
+        case "HypeSquad Balance": return "HypeSquad Balance";
+        case "Early Supporter": return "Soutien de la première heure";
+        case "Former Moderator": return "Ancien modérateur";
+        case "Bug Hunter Lvl 2": return "Chasseur de bugs Nv. 2";
+        case "Early Verified Bot Developer": return "Développeur de bot vérifié de la première heure";
+        case "Active Developer": return "Développeur actif";
+
+        // Special Badges
+        case "Completed a quest": return "A accompli une quête";
+        case "Orbs — Apprentice": return "Orbes — Apprenti";
+        case "Old username": return "Ancien nom d'utilisateur";
+        case "Level Reached": return "Niveau atteint";
+
+        // Gifting Badges
+        case "Gifting Icon": return "Icone de cadeaux";
+        case "Gifting Patron": return "Mécène de cadeaux";
+        case "Gifting Champion": return "Champion de cadeaux";
+        case "Gifting Luminary": return "Luminaire de cadeaux";
+        case "Gifting Hero": return "Héros de cadeaux";
+        case "Gifting Legend": return "Légende de cadeaux";
+
+        default: return key;
+    }
 }
 
 function getStandardBadgeDesc(key: string): string {
-    const lang = document.documentElement.lang || "en-US";
-    const isFr = lang.startsWith("fr");
+    const isFr = getDiscordLocale().toLowerCase().startsWith("fr");
     if (!isFr) {
-        // Return fallback English labels
         switch (key) {
             case "Staff Discord": return "Discord Staff";
             case "Partnered Server Owner": return "Partnered Server Owner";
@@ -195,17 +268,17 @@ function getStandardBadgeDesc(key: string): string {
     }
 
     switch (key) {
-        case "Staff Discord": return "Équipe Discord";
+        case "Staff Discord": return "Personnel Discord";
         case "Partnered Server Owner": return "Propriétaire d'un serveur partenaire";
         case "HypeSquad Events": return "Événements HypeSquad";
-        case "Bug Hunter Lvl 1": return "Chasseur de bugs";
+        case "Bug Hunter Lvl 1": return "Chasseur de bugs Nv. 1";
         case "HypeSquad Bravery": return "HypeSquad Bravery";
         case "HypeSquad Brilliance": return "HypeSquad Brilliance";
         case "HypeSquad Balance": return "HypeSquad Balance";
         case "Early Supporter": return "Soutien de la première heure";
-        case "Former Moderator": return "Anciens du programme de modération";
-        case "Bug Hunter Lvl 2": return "Chasseur de bugs, niveau 2";
-        case "Early Verified Bot Developer": return "Développeur de bot certifié de la première heure";
+        case "Former Moderator": return "Ancien modérateur";
+        case "Bug Hunter Lvl 2": return "Chasseur de bugs Nv. 2";
+        case "Early Verified Bot Developer": return "Développeur de bot vérifié de la première heure";
         case "Active Developer": return "Développeur actif";
         default: return key;
     }
@@ -447,8 +520,23 @@ function loadDataSync() {
     }
 }
 
+let _lastKnownUserId: string | null = null;
+
 function onAccountSwitch() {
     updateCachedRealData();
+    const currentId = AuthenticationStore?.getId?.() || null;
+
+    // CONNECTION_OPEN fires on ANY websocket reconnect (e.g. after saving profile).
+    // Only do the full reset if the actual account has changed.
+    if (currentId && currentId === _lastKnownUserId) {
+        // Same account reconnected (e.g. after username/pfp change) — just clear caches, no rerender
+        cachedFakeUser = null;
+        cachedOriginalUser = null;
+        _dataVersion++;
+        return;
+    }
+
+    _lastKnownUserId = currentId;
     syncCurrentUserData();
     cachedFakeUser = null;
     cachedOriginalUser = null;
@@ -666,60 +754,11 @@ async function copyUserProfile(userId: string) {
     }
 }
 
-const userContextMenuPatch: NavContextMenuPatchCallback = (children, { user }: any) => {
-    if (!children || !Array.isArray(children) || !user || !user.id) return;
-    try {
-        const me = UserStore.getCurrentUser();
-        if (!me || user.id === me.id) return;
-        const isCopied = isEnabled && storedData.copiedUserId === user.id;
-
-        children.push(
-            <Menu.MenuGroup>
-                {isCopied ? (
-                    <Menu.MenuItem
-                        id="remove-copy-profile"
-                        label={t("Remove copy profile")}
-                        color="danger"
-                        action={() => {
-                            try {
-                                const myId = AuthenticationStore?.getId?.();
-                                if (myId) {
-                                    delete allAccountsData[myId];
-                                    delete allAccountsEnabled[myId];
-                                }
-                                storedData = {};
-                                isEnabled = false;
-                                saveDataSync({}, false);
-                                cachedFakeUser = null;
-                                cachedOriginalUser = null;
-                                _trueOriginalUser = null;
-                                leCacheU = null;
-                                leCacheI = null;
-                                cacheDatesR = [];
-                                cacheDatesF = [];
-                                _dataVersion++;
-                                saveAllDataSync();
-                                DataStore.set(DS_ALL_DATA, allAccountsData).catch(() => { });
-                                DataStore.set(DS_ALL_ENABLED, allAccountsEnabled).catch(() => { });
-                                forceAccountPanelRerender();
-                            } catch (e) {
-                                console.error("[CustomProfile] Error removing copy:", e);
-                            }
-                        }}
-                    />
-                ) : (
-                    <Menu.MenuItem
-                        id="copy-user-profile"
-                        label={t("Copy this profile")}
-                        action={() => copyUserProfile(user.id)}
-                    />
-                )}
-            </Menu.MenuGroup>
-        );
-    } catch (err) {
-        console.error("[CustomProfile] Context menu patch error:", err);
-    }
+const userContextMenuPatch: NavContextMenuPatchCallback = (_children, _props: any) => {
+    // "Copy this profile" / "Remove copy profile" removed
 };
+
+
 
 
 function getRealDateVariants(): string[] {
@@ -803,6 +842,70 @@ function computeFakeSinceDate(minMonths: number, maxMonths: number, seed: string
         d.setTime(now.getTime() - 24 * 60 * 60 * 1000);
     }
     return d;
+}
+
+const NITRO_LEVEL_MIN_MONTHS = [0, 1, 3, 6, 12, 24, 36, 60, 72];
+const NITRO_LEVEL_MAX_MONTHS = [1, 3, 6, 12, 24, 36, 60, 72, 108];
+
+const BOOST_LEVEL_MIN_MONTHS = [1, 2, 3, 6, 9, 12, 15, 18, 24];
+const BOOST_LEVEL_MAX_MONTHS = [2, 3, 6, 9, 12, 15, 18, 24, 48];
+
+function getFakeNitroDate(level: number, seedBase: string): Date {
+    const min = NITRO_LEVEL_MIN_MONTHS[level] ?? 1;
+    const max = NITRO_LEVEL_MAX_MONTHS[level] ?? (min + 24);
+    return computeFakeSinceDate(min, max, `${seedBase}:nitro:${level}:${min}:${max}`);
+}
+
+function getFakeBoostDate(boostIdx: number, seedBase: string): Date {
+    const min = BOOST_LEVEL_MIN_MONTHS[boostIdx] ?? 1;
+    const max = BOOST_LEVEL_MAX_MONTHS[boostIdx] ?? (min + 12);
+    return computeFakeSinceDate(min, max, `${seedBase}:boost:${boostIdx}:${min}:${max}`);
+}
+
+function getDiscordLocale(): string {
+    try {
+        return document.documentElement.lang || (window as any).DiscordNative?.app?.getLocale?.() || navigator.language || "en-US";
+    } catch {
+        return "en-US";
+    }
+}
+
+function formatNitroBadgeDesc(d: Date | string): string {
+    const dateObj = typeof d === "string" ? new Date(d) : d;
+    if (!dateObj || isNaN(dateObj.getTime())) return "Subscriber since";
+    const locale = getDiscordLocale().toLowerCase();
+    const isFr = locale.startsWith("fr");
+    
+    const day = dateObj.getDate().toString().padStart(2, "0");
+    const month = (dateObj.getMonth() + 1).toString().padStart(2, "0");
+    const yy = dateObj.getFullYear().toString().slice(-2);
+    
+    if (isFr) {
+        return `Abonné depuis ${day}/${month}/${yy}`;
+    } else {
+        return `Subscriber since ${month}/${day}/${yy}`;
+    }
+}
+
+function formatBoostBadgeDesc(d: Date | string): string {
+    const dateObj = typeof d === "string" ? new Date(d) : d;
+    if (!dateObj || isNaN(dateObj.getTime())) return "Server boosting since";
+    const locale = getDiscordLocale().toLowerCase();
+    const isFr = locale.startsWith("fr");
+    
+    const day = dateObj.getDate();
+    const year = dateObj.getFullYear();
+    
+    const monthsEn = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const monthsFr = ["janv.", "févr.", "mars", "avr.", "mai", "juin", "juil.", "août", "sept.", "oct.", "nov.", "déc."];
+    
+    if (isFr) {
+        const mName = monthsFr[dateObj.getMonth()] || "janv.";
+        return `Booster de serveurs depuis le ${day} ${mName} ${year}`;
+    } else {
+        const mName = monthsEn[dateObj.getMonth()] || "Jan";
+        return `Server boosting since ${mName} ${day}, ${year}`;
+    }
 }
 
 let _cachedMyId: string | null = null;
@@ -1026,83 +1129,87 @@ function BadgePicker({ selected, onChange, nitroType, onNitroType, boostLevel, o
     levelReached: number; onLevelReached: (v: number) => void;
 }) {
     const hasOldName = customIds.includes("oldname");
+    const isFr = getDiscordLocale().toLowerCase().startsWith("fr");
     return (
         <div className="cp-field">
-            <SectionLabel>{t("Badges")}</SectionLabel>
+            <SectionLabel>{getLocalizedBadgeLabel("Badges")}</SectionLabel>
             <div className="cp-badges">
                 {BADGES.map(b => (
-                    <BadgeBtn key={b.flag} label={b.label} icon={b.icon}
+                    <BadgeBtn key={b.flag} label={getLocalizedBadgeLabel(b.key)} icon={b.icon}
                         active={!!(selected & b.flag)} onClick={() => onChange(selected ^ b.flag)} />
                 ))}
             </div>
-            <SectionLabel style={{ marginTop: 8 }}>{t("Evolving Nitro Badge")}</SectionLabel>
+            <SectionLabel style={{ marginTop: 8 }}>{getLocalizedBadgeLabel("Evolving Nitro Badge")}</SectionLabel>
             <div className="cp-badges">
-                <BadgeBtn label={t("None")} active={nitroType === -1} onClick={() => onNitroType(-1)} />
-                {NITRO_LEVELS.map((n, i) => (
-                    <BadgeBtn key={i} label={n.label} icon={n.icon} active={nitroType === i} onClick={() => {
-                        onNitroType(i);
-                        // Reset boost when selecting nitro type manually if desired,
-                        // but usually these are separate.
-                    }} />
-                ))}
+                <BadgeBtn label={getLocalizedBadgeLabel("None")} active={nitroType === -1} onClick={() => onNitroType(-1)} />
+                {NITRO_LEVELS.map((n, i) => {
+                    const nLabel = isFr
+                        ? n.label.replace("mois", "mois").replace("0 mois", "0 mois")
+                        : n.label.replace(" (0 mois)", " (0 months)").replace(" (1 mois)", " (1 month)").replace(" mois)", " months)");
+                    return (
+                        <BadgeBtn key={i} label={nLabel} icon={n.icon} active={nitroType === i} onClick={() => {
+                            onNitroType(i);
+                        }} />
+                    );
+                })}
             </div>
-            <SectionLabel style={{ marginTop: 8 }}>{t("Special Badges")}</SectionLabel>
+            <SectionLabel style={{ marginTop: 8 }}>{getLocalizedBadgeLabel("Special Badges")}</SectionLabel>
             <div className="cp-badges">
-                <BadgeBtn label={t("Completed a quest")}
+                <BadgeBtn label={getLocalizedBadgeLabel("Completed a quest")}
                     icon="https://cdn.discordapp.com/badge-icons/7d9ae358c8c5e118768335dbe68b4fb8.png"
                     active={customIds.includes("quest")}
                     onClick={() => onCustomIds(customIds.includes("quest") ? customIds.filter(x => x !== "quest") : [...customIds, "quest"])} />
-                <BadgeBtn label={t("Orbs — Apprentice")}
+                <BadgeBtn label={getLocalizedBadgeLabel("Orbs — Apprentice")}
                     icon="https://cdn.discordapp.com/badge-icons/83d8a1eb09a8d64e59233eec5d4d5c2d.png"
                     active={customIds.includes("orbs")}
                     onClick={() => onCustomIds(customIds.includes("orbs") ? customIds.filter(x => x !== "orbs") : [...customIds, "orbs"])} />
-                <BadgeBtn label={t("Old username")} icon={OLD_NAME_BADGE_ICON} active={hasOldName}
+                <BadgeBtn label={getLocalizedBadgeLabel("Old username")} icon={OLD_NAME_BADGE_ICON} active={hasOldName}
                     onClick={() => onCustomIds(hasOldName ? customIds.filter(x => x !== "oldname") : [...customIds, "oldname"])} />
-                <BadgeBtn label={t("Level Reached")}
+                <BadgeBtn label={getLocalizedBadgeLabel("Level Reached")}
                     icon="https://cdn.discordapp.com/badge-icons/ca105ad9cfc8580c765101d17bbb2323.png"
                     active={customIds.includes("gifting_level")}
                     onClick={() => onCustomIds(customIds.includes("gifting_level") ? customIds.filter(x => x !== "gifting_level") : [...customIds, "gifting_level"])} />
             </div>
-            <SectionLabel style={{ marginTop: 8 }}>{t("Gifting Badges")}</SectionLabel>
+            <SectionLabel style={{ marginTop: 8 }}>{getLocalizedBadgeLabel("Gifting Badges")}</SectionLabel>
             <div className="cp-badges">
-                <BadgeBtn label={t("Gifting Icon")}
+                <BadgeBtn label={getLocalizedBadgeLabel("Gifting Icon")}
                     icon="https://cdn.discordapp.com/badge-icons/64f2413c9b9803661322aaad25826b62.png"
                     active={customIds.includes("gifting_icon")}
                     onClick={() => onCustomIds(customIds.includes("gifting_icon") ? customIds.filter(x => x !== "gifting_icon") : [...customIds, "gifting_icon"])} />
-                <BadgeBtn label={t("Gifting Patron")}
+                <BadgeBtn label={getLocalizedBadgeLabel("Gifting Patron")}
                     icon="https://cdn.discordapp.com/badge-icons/ac305d1b9481f312ce4419e7f8296558.png"
                     active={customIds.includes("gifting_patron")}
                     onClick={() => onCustomIds(customIds.includes("gifting_patron") ? customIds.filter(x => x !== "gifting_patron") : [...customIds, "gifting_patron"])} />
-                <BadgeBtn label={t("Gifting Champion")}
+                <BadgeBtn label={getLocalizedBadgeLabel("Gifting Champion")}
                     icon="https://cdn.discordapp.com/badge-icons/8b7792c4f65953d3ff564f23429cb79e.png"
                     active={customIds.includes("gifting_champion")}
                     onClick={() => onCustomIds(customIds.includes("gifting_champion") ? customIds.filter(x => x !== "gifting_champion") : [...customIds, "gifting_champion"])} />
-                <BadgeBtn label={t("Gifting Luminary")}
+                <BadgeBtn label={getLocalizedBadgeLabel("Gifting Luminary")}
                     icon="https://cdn.discordapp.com/badge-icons/3119f5504b2cd09576a323908c7c3517.png"
                     active={customIds.includes("gifting_luminary")}
                     onClick={() => onCustomIds(customIds.includes("gifting_luminary") ? customIds.filter(x => x !== "gifting_luminary") : [...customIds, "gifting_luminary"])} />
-                <BadgeBtn label={t("Gifting Hero")}
+                <BadgeBtn label={getLocalizedBadgeLabel("Gifting Hero")}
                     icon="https://cdn.discordapp.com/badge-icons/77d65b1f210014a11eb1582ee06ab684.png"
                     active={customIds.includes("gifting_hero")}
                     onClick={() => onCustomIds(customIds.includes("gifting_hero") ? customIds.filter(x => x !== "gifting_hero") : [...customIds, "gifting_hero"])} />
-                <BadgeBtn label={t("Gifting Legend")}
+                <BadgeBtn label={getLocalizedBadgeLabel("Gifting Legend")}
                     icon="https://cdn.discordapp.com/badge-icons/7fe346cfc5da1340087d8759a9e7a395.png"
                     active={customIds.includes("gifting_legend")}
                     onClick={() => onCustomIds(customIds.includes("gifting_legend") ? customIds.filter(x => x !== "gifting_legend") : [...customIds, "gifting_legend"])} />
             </div>
             {hasOldName && (
                 <div className="cp-field" style={{ marginTop: 6 }}>
-                    <SectionLabel style={{ marginTop: 0 }}>{t("Old username displayed in tooltip")}</SectionLabel>
+                    <SectionLabel style={{ marginTop: 0 }}>{isFr ? "Ancien nom d'utilisateur affiché" : "Old username displayed in tooltip"}</SectionLabel>
                     <input className="cp-input" value={oldName} placeholder="OldUser#0000"
                         onChange={e => onOldName(e.target.value)} />
                     <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 3 }}>
-                        {t('Ex : Triggerr#5954 — will appear as "Old username: Triggerr#5954" when hovering the badge.')}
+                        {isFr ? 'Ex : Triggerr#5954 — apparaîtra comme "Connu à l\'origine sous le nom de Triggerr#5954" au survol du badge.' : 'Ex : Triggerr#5954 — will appear as "Originally known as Triggerr#5954" when hovering the badge.'}
                     </div>
                 </div>
             )}
             {customIds.includes("gifting_level") && (
                 <div className="cp-field" style={{ marginTop: 6 }}>
-                    <SectionLabel style={{ marginTop: 0 }}>{t("Level reached")}</SectionLabel>
+                    <SectionLabel style={{ marginTop: 0 }}>{isFr ? "Niveau atteint" : "Level reached"}</SectionLabel>
                     <input className="cp-input" type="number" min="1" max="10000" value={levelReached}
                         onChange={e => {
                             const val = parseInt(e.target.value, 10);
@@ -1110,12 +1217,15 @@ function BadgePicker({ selected, onChange, nitroType, onNitroType, boostLevel, o
                         }} />
                 </div>
             )}
-            <SectionLabel style={{ marginTop: 8 }}>{t("Boost Badge (Server Booster)")}</SectionLabel>
+            <SectionLabel style={{ marginTop: 8 }}>{getLocalizedBadgeLabel("Server Boost Badges")}</SectionLabel>
             <div className="cp-badges">
-                <BadgeBtn label={t("None")} active={boostLevel === -1} onClick={() => onBoostLevel(-1)} />
-                {BOOST_LABELS.map((lbl, i) => (
-                    <BadgeBtn key={i} label={lbl} icon={BOOST_ICONS[i]} active={boostLevel === i} onClick={() => onBoostLevel(i)} />
-                ))}
+                <BadgeBtn label={getLocalizedBadgeLabel("None")} active={boostLevel === -1} onClick={() => onBoostLevel(-1)} />
+                {BOOST_LABELS.map((lbl, i) => {
+                    const bLbl = isFr ? lbl : lbl.replace("Mois", "Months").replace("1 Months", "1 Month");
+                    return (
+                        <BadgeBtn key={i} label={bLbl} icon={BOOST_ICONS[i]} active={boostLevel === i} onClick={() => onBoostLevel(i)} />
+                    );
+                })}
             </div>
         </div>
     );
@@ -1256,8 +1366,9 @@ function CustomProfileModal({ rootProps }: { rootProps: any; }) {
         } catch (e) { console.error("[CustomProfile] Failed to fetch accounts:", e); }
 
         const me = UserStore.getCurrentUser();
-        // For debug: if only one account found, simulate anyway to test if bar shows
-        return me ? [me, { ...me, id: "debug-placeholder", username: "Second Account?", globalName: "Simulation" }] : [];
+        // Pour debug: si on ne trouve qu'un compte, on simule quand même pour voir si la barre s'affiche
+        return me ? [me, { ...me, id: "debug-placeholder", username: "Second Account?",
+     globalName: "Simulation" }] : [];
     }, []);
 
     // When changing selected account, load its data
@@ -1656,9 +1767,10 @@ function CPDMNotice({ userId }: { userId: string; }) {
 
 export default definePlugin({
     name: "CustomProfile",
-    enabledByDefault: false,
+    enabledByDefault: true,
     description: "Visually customize your Discord profile (username, PFP, banner, badges, bio...) — persistent, only visible to you.",
-    authors: [{ name: "Ghostcord", id: 0n }],
+    authors: [{ name: "Ghostcord",
+     id: 0n }],
     dependencies: ["HeaderBarAPI", "ContextMenuAPI"],
 
     headerBarButton: {
@@ -1842,12 +1954,9 @@ export default definePlugin({
                 }
                 if (prop === "premiumSince") {
                     if (isEnabled && storedData.nitro) {
-                        const LEVEL_MONTHS = [1, 1, 3, 6, 12, 24, 36, 60, 72];
                         const seedBase = target.id || "self";
                         const nl = storedData.nitroLevel ?? 0;
-                        const nlMin = nl === 0 ? 0 : (LEVEL_MONTHS[nl] ?? 1);
-                        const nlMax = LEVEL_MONTHS[nl + 1] ?? (nlMin + 24);
-                        return computeFakeSinceDate(nlMin, nlMax, `${seedBase}:nitro`);
+                        return getFakeNitroDate(nl, seedBase);
                     }
                     return target.premiumSince;
                 }
@@ -1855,11 +1964,8 @@ export default definePlugin({
                     if (isEnabled && storedData.nitro) {
                         const bm = storedData.boostMonths ?? -1;
                         if (bm >= 0) {
-                            const BOOST_M = [1, 2, 3, 6, 9, 12, 15, 18, 24];
                             const seedBase = target.id || "self";
-                            const bmMin = BOOST_M[bm] ?? 1;
-                            const bmMax = BOOST_M[bm + 1] ?? (bmMin + 12);
-                            return computeFakeSinceDate(bmMin, bmMax, `${seedBase}:boost`);
+                            return getFakeBoostDate(bm, seedBase);
                         }
                     }
                     return target.premiumGuildSince;
@@ -1970,12 +2076,9 @@ export default definePlugin({
                 }
                 if (prop === "premiumSince") {
                     if (data.nitro) {
-                        const LEVEL_MONTHS = [1, 1, 3, 6, 12, 24, 36, 60, 72];
                         const seedBase = target.id || "other";
                         const nl = data.nitroLevel ?? 0;
-                        const nlMin = nl === 0 ? 0 : (LEVEL_MONTHS[nl] ?? 1);
-                        const nlMax = LEVEL_MONTHS[nl + 1] ?? (nlMin + 24);
-                        return computeFakeSinceDate(nlMin, nlMax, `${seedBase}:nitro`);
+                        return getFakeNitroDate(nl, seedBase);
                     }
                     return target.premiumSince;
                 }
@@ -1983,11 +2086,8 @@ export default definePlugin({
                     if (data.nitro) {
                         const bm = data.boostMonths ?? -1;
                         if (bm >= 0) {
-                            const BOOST_M = [1, 2, 3, 6, 9, 12, 15, 18, 24];
                             const seedBase = target.id || "other";
-                            const bmMin = BOOST_M[bm] ?? 1;
-                            const bmMax = BOOST_M[bm + 1] ?? (bmMin + 12);
-                            return computeFakeSinceDate(bmMin, bmMax, `${seedBase}:boost`);
+                            return getFakeBoostDate(bm, seedBase);
                         }
                     }
                     return target.premiumGuildSince;
@@ -2070,18 +2170,13 @@ export default definePlugin({
                         merged.themeColors = [data.accentColor, c2];
                     }
                     const nl = data.nitroLevel ?? 0;
-                    const LEVEL_MONTHS = [1, 1, 3, 6, 12, 24, 36, 60, 72];
                     const seedBase = profile?.userId || data.copiedUserId || "other";
-                    const nlMin = nl === 0 ? 0 : (LEVEL_MONTHS[nl] ?? 1);
-                    const nlMax = LEVEL_MONTHS[nl + 1] ?? (nlMin + 24);
-                    merged.premiumSince = computeFakeSinceDate(nlMin, nlMax, `${seedBase}:nitro`);
+                    const since = getFakeNitroDate(nl, seedBase);
+                    merged.premiumSince = since;
 
                     const bm = data.boostMonths ?? -1;
                     if (bm >= 0) {
-                        const BOOST_M = [1, 2, 3, 6, 9, 12, 15, 18, 24];
-                        const bmMin = BOOST_M[bm] ?? 1;
-                        const bmMax = BOOST_M[bm + 1] ?? (bmMin + 12);
-                        merged.premiumGuildSince = computeFakeSinceDate(bmMin, bmMax, `${seedBase}:boost`);
+                        merged.premiumGuildSince = getFakeBoostDate(bm, seedBase);
                     } else {
                         merged.premiumGuildSince = null;
                     }
@@ -2102,29 +2197,18 @@ export default definePlugin({
             if (overrideFlags) {
                 if (data.nitro) {
                     const nl = data.nitroLevel ?? 0;
-                    const LEVEL_MONTHS = [1, 1, 3, 6, 12, 24, 36, 60, 72];
+                    const LEVEL_MONTHS = [0, 1, 3, 6, 12, 24, 36, 60, 72];
                     const nitroHash = NITRO_LEVELS[nl]?.icon.split("/").pop()?.replace(".png", "") || "2ba85e8026a8614b640c2837bcdfe21b";
                     const months = LEVEL_MONTHS[nl] ?? 1;
                     const nitroId = `premium_tenure_${months}_month_v2`;
 
-                    const nitroSeedBase = profile?.userId || data.copiedUserId || "other";
-                    const nlDateMin = nl === 0 ? 0 : months;
-                    const nlMaxMonths = LEVEL_MONTHS[nl + 1] ?? (months + 24);
-                    const since = computeFakeSinceDate(nlDateMin, nlMaxMonths, `${nitroSeedBase}:nitro`);
+                    const seedBase = profile?.userId || data.copiedUserId || "other";
+                    const since = getFakeNitroDate(nl, seedBase);
                     merged.premiumSince = since;
-
-                    const lang = document.documentElement.lang || "en-US";
-                    const formattedDate = since.toLocaleDateString(lang, { year: 'numeric', month: 'short', day: 'numeric' });
-                    let descText = `Subscriber since ${formattedDate}`;
-                    if (lang.startsWith("fr")) descText = `Abonné(e) depuis le ${formattedDate}`;
-                    else if (lang.startsWith("es")) descText = `Suscriptor desde el ${formattedDate}`;
-                    else if (lang.startsWith("de")) descText = `Abonnent seit ${formattedDate}`;
-
-                    badgesArr.push({ 
-                        id: nitroId, 
-                        icon: nitroHash, 
-                        description: descText,
-                        link: "https://discord.com/settings/premium"
+                    badgesArr.push({
+                        id: nitroId,
+                        icon: nitroHash,
+                        description: formatNitroBadgeDesc(since)
                     });
 
                     const bm = data.boostMonths ?? -1;
@@ -2132,21 +2216,13 @@ export default definePlugin({
                         const BOOST_M = [1, 2, 3, 6, 9, 12, 15, 18, 24];
                         const boostHash = BOOST_ICONS[bm]?.split("/").pop()?.replace(".png", "") || "51040c70d4f20a921ad6674ff86fc95c";
                         const bMonths = BOOST_M[bm] ?? 1;
-                        const bMaxMonths = BOOST_M[bm + 1] ?? (bMonths + 12);
-                        const boostSince = computeFakeSinceDate(bMonths, bMaxMonths, `${nitroSeedBase}:boost`);
+                        const boostSince = getFakeBoostDate(bm, seedBase);
                         merged.premiumGuildSince = boostSince;
 
-                        const bFormattedDate = boostSince.toLocaleDateString(lang, { year: 'numeric', month: 'short', day: 'numeric' });
-                        let boostDescText = `Server boosting since ${bFormattedDate}`;
-                        if (lang.startsWith("fr")) boostDescText = `Booster de serveurs depuis le ${bFormattedDate}`;
-                        else if (lang.startsWith("es")) boostDescText = `Mejorando servidores desde el ${bFormattedDate}`;
-                        else if (lang.startsWith("de")) boostDescText = `Server-Booster seit ${bFormattedDate}`;
-
-                        badgesArr.push({ 
-                            id: `guild_booster_lvl${bm + 1}`, 
-                            icon: boostHash, 
-                            description: boostDescText,
-                            link: "https://discord.com/settings/guild-boosting"
+                        badgesArr.push({
+                            id: `guild_booster_${bMonths}_month`,
+                            icon: boostHash,
+                            description: formatBoostBadgeDesc(boostSince)
                         });
                     } else {
                         merged.premiumGuildSince = null;
@@ -2157,27 +2233,32 @@ export default definePlugin({
                 }
                 
                 const wantedFlags = (data.badgeFlags != null) ? data.badgeFlags : profile.publicFlags;
-                const hasBadgeWithHash = (hash: string) => badgesArr.some(b => b && b.icon === hash);
-                for (const badge of BADGES) {
-                    if (wantedFlags & badge.flag) {
-                        const hash = badge.icon.split("/").pop()?.replace(".png", "") || "";
-                        if (!hasBadgeWithHash(hash)) {
+                merged.publicFlags = wantedFlags;
+            }
+
+            const customIds = data.customBadgeIds ?? [];
+            const isFr = getDiscordLocale().toLowerCase().startsWith("fr");
+            const hasBadge = (badgeId: string) => badgesArr.some(b => b && b.id === badgeId);
+
+            const wantedFlags = merged.publicFlags ?? 0;
+            if (wantedFlags) {
+                for (const bDef of BADGES) {
+                    if (wantedFlags & bDef.flag) {
+                        const bId = getBadgeId(bDef.key);
+                        if (!hasBadge(bId)) {
+                            const hash = bDef.icon.split("/").pop()?.replace(".png", "") || "";
                             badgesArr.push({
-                                id: getBadgeId(badge.key),
+                                id: bId,
                                 icon: hash,
-                                description: getStandardBadgeDesc(badge.key)
+                                description: getStandardBadgeDesc(bDef.key)
                             });
                         }
                     }
                 }
             }
 
-            const customIds = data.customBadgeIds ?? [];
-            const isFr = (document.documentElement.lang || "en-US").startsWith("fr");
-            const hasBadge = (badgeId: string) => badgesArr.some(b => b && b.id === badgeId);
-
-            if (customIds.includes("quest") && !hasBadge("quest")) badgesArr.push({ id: "quest", icon: "7d9ae358c8c5e118768335dbe68b4fb8", description: isFr ? "A terminé une quête" : "Completed a quest" });
-            if (customIds.includes("orbs") && !hasBadge("orbs")) badgesArr.push({ id: "orbs", icon: "83d8a1eb09a8d64e59233eec5d4d5c2d", description: isFr ? "Orbes — Apprenti" : "Orbs — Apprentice" });
+            if (customIds.includes("quest") && !hasBadge("quest")) badgesArr.push({ id: "quest", icon: "7d9ae358c8c5e118768335dbe68b4fb8", description: getLocalizedBadgeLabel("Completed a quest") });
+            if (customIds.includes("orbs") && !hasBadge("orbs")) badgesArr.push({ id: "orbs", icon: "83d8a1eb09a8d64e59233eec5d4d5c2d", description: getLocalizedBadgeLabel("Orbs — Apprentice") });
             if (customIds.includes("oldname") && !hasBadge("legacy_username")) {
                 const dText = data.oldName ? (isFr ? "Connu à l'origine sous le nom de " + data.oldName : "Originally known as " + data.oldName) : (isFr ? "Connu à l'origine sous le nom de ..." : "Originally known as ...");
                 badgesArr.push({ id: "legacy_username", icon: "6de6d34650760ba5551a79732e98ed60", description: dText });
@@ -2277,18 +2358,13 @@ export default definePlugin({
                         merged.themeColors = [storedData.accentColor, c2];
                     }
                     const nl = storedData.nitroLevel ?? 0;
-                    const LEVEL_MONTHS = [1, 1, 3, 6, 12, 24, 36, 60, 72];
                     const seedBase = UserStore.getCurrentUser()?.id || "self";
-                    const nlMin = nl === 0 ? 0 : (LEVEL_MONTHS[nl] ?? 1);
-                    const nlMax = LEVEL_MONTHS[nl + 1] ?? (nlMin + 24);
-                    merged.premiumSince = computeFakeSinceDate(nlMin, nlMax, `${seedBase}:nitro`);
+                    const since = getFakeNitroDate(nl, seedBase);
+                    merged.premiumSince = since;
 
                     const bm = storedData.boostMonths ?? -1;
                     if (bm >= 0) {
-                        const BOOST_M = [1, 2, 3, 6, 9, 12, 15, 18, 24];
-                        const bmMin = BOOST_M[bm] ?? 1;
-                        const bmMax = BOOST_M[bm + 1] ?? (bmMin + 12);
-                        merged.premiumGuildSince = computeFakeSinceDate(bmMin, bmMax, `${seedBase}:boost`);
+                        merged.premiumGuildSince = getFakeBoostDate(bm, seedBase);
                     } else {
                         merged.premiumGuildSince = null;
                     }
@@ -2313,28 +2389,18 @@ export default definePlugin({
             if (overrideFlags) {
                 if (storedData.nitro) {
                     const nl = storedData.nitroLevel ?? 0;
-                    const LEVEL_MONTHS = [1, 1, 3, 6, 12, 24, 36, 60, 72];
+                    const LEVEL_MONTHS = [0, 1, 3, 6, 12, 24, 36, 60, 72];
                     const nitroHash = NITRO_LEVELS[nl]?.icon.split("/").pop()?.replace(".png", "") || "2ba85e8026a8614b640c2837bcdfe21b";
                     const months = LEVEL_MONTHS[nl] ?? 1;
                     const nitroId = `premium_tenure_${months}_month_v2`;
 
-                    const nitroSeedBase = UserStore.getCurrentUser()?.id || "self";
-                    const nlMaxMonths = LEVEL_MONTHS[nl + 1] ?? (months + 24);
-                    const since = computeFakeSinceDate(months, nlMaxMonths, `${nitroSeedBase}:nitro`);
+                    const seedBase = UserStore.getCurrentUser()?.id || "self";
+                    const since = getFakeNitroDate(nl, seedBase);
                     merged.premiumSince = since;
-
-                    const lang = document.documentElement.lang || "en-US";
-                    const formattedDate = since.toLocaleDateString(lang, { year: 'numeric', month: 'short', day: 'numeric' });
-                    let descText = `Subscriber since ${formattedDate}`;
-                    if (lang.startsWith("fr")) descText = `Abonné(e) depuis le ${formattedDate}`;
-                    else if (lang.startsWith("es")) descText = `Suscriptor desde el ${formattedDate}`;
-                    else if (lang.startsWith("de")) descText = `Abonnent seit ${formattedDate}`;
-
-                    badgesArr.push({ 
-                        id: nitroId, 
-                        icon: nitroHash, 
-                        description: descText,
-                        link: "https://discord.com/settings/premium"
+                    badgesArr.push({
+                        id: nitroId,
+                        icon: nitroHash,
+                        description: formatNitroBadgeDesc(since)
                     });
 
                     const bm = storedData.boostMonths ?? -1;
@@ -2342,21 +2408,13 @@ export default definePlugin({
                         const BOOST_M = [1, 2, 3, 6, 9, 12, 15, 18, 24];
                         const boostHash = BOOST_ICONS[bm]?.split("/").pop()?.replace(".png", "") || "51040c70d4f20a921ad6674ff86fc95c";
                         const bMonths = BOOST_M[bm] ?? 1;
-                        const bMaxMonths = BOOST_M[bm + 1] ?? (bMonths + 12);
-                        const boostSince = computeFakeSinceDate(bMonths, bMaxMonths, `${nitroSeedBase}:boost`);
+                        const boostSince = getFakeBoostDate(bm, seedBase);
                         merged.premiumGuildSince = boostSince;
 
-                        const bFormattedDate = boostSince.toLocaleDateString(lang, { year: 'numeric', month: 'short', day: 'numeric' });
-                        let boostDescText = `Server boosting since ${bFormattedDate}`;
-                        if (lang.startsWith("fr")) boostDescText = `Booster de serveurs depuis le ${bFormattedDate}`;
-                        else if (lang.startsWith("es")) boostDescText = `Mejorando servidores depuis el ${bFormattedDate}`;
-                        else if (lang.startsWith("de")) boostDescText = `Server-Booster seit ${bFormattedDate}`;
-
-                        badgesArr.push({ 
-                            id: `guild_booster_lvl${bm + 1}`, 
-                            icon: boostHash, 
-                            description: boostDescText,
-                            link: "https://discord.com/settings/guild-boosting"
+                        badgesArr.push({
+                            id: `guild_booster_${bMonths}_month`,
+                            icon: boostHash,
+                            description: formatBoostBadgeDesc(boostSince)
                         });
                     } else {
                         merged.premiumGuildSince = null;
@@ -2366,26 +2424,32 @@ export default definePlugin({
                     merged.premiumGuildSince = null;
                 }
                 const wantedFlags = (storedData.badgeFlags != null) ? storedData.badgeFlags : profile.publicFlags;
-                const hasBadgeWithHash = (hash: string) => badgesArr.some(b => b && b.icon === hash);
-                for (const badge of BADGES) {
-                    if (wantedFlags & badge.flag) {
-                        const hash = badge.icon.split("/").pop()?.replace(".png", "") || "";
-                        if (!hasBadgeWithHash(hash)) {
+                merged.publicFlags = wantedFlags;
+            }
+
+            const customIds = storedData.customBadgeIds ?? [];
+            const isFr = getDiscordLocale().toLowerCase().startsWith("fr");
+            const hasBadge = (badgeId: string) => badgesArr.some(b => b && b.id === badgeId);
+
+            const wantedFlags = merged.publicFlags ?? 0;
+            if (wantedFlags) {
+                for (const bDef of BADGES) {
+                    if (wantedFlags & bDef.flag) {
+                        const bId = getBadgeId(bDef.key);
+                        if (!hasBadge(bId)) {
+                            const hash = bDef.icon.split("/").pop()?.replace(".png", "") || "";
                             badgesArr.push({
-                                id: getBadgeId(badge.key),
+                                id: bId,
                                 icon: hash,
-                                description: getStandardBadgeDesc(badge.key)
+                                description: getStandardBadgeDesc(bDef.key)
                             });
                         }
                     }
                 }
             }
 
-            const customIds = storedData.customBadgeIds ?? [];
-            const isFr = (document.documentElement.lang || "en-US").startsWith("fr");
-            const hasBadge = (badgeId: string) => badgesArr.some(b => b && b.id === badgeId);
-            if (customIds.includes("quest") && !hasBadge("quest")) badgesArr.push({ id: "quest", icon: "7d9ae358c8c5e118768335dbe68b4fb8", description: isFr ? "A terminé une quête" : "Completed a quest" });
-            if (customIds.includes("orbs") && !hasBadge("orbs")) badgesArr.push({ id: "orbs", icon: "83d8a1eb09a8d64e59233eec5d4d5c2d", description: isFr ? "Orbes — Apprenti" : "Orbs — Apprentice" });
+            if (customIds.includes("quest") && !hasBadge("quest")) badgesArr.push({ id: "quest", icon: "7d9ae358c8c5e118768335dbe68b4fb8", description: getLocalizedBadgeLabel("Completed a quest") });
+            if (customIds.includes("orbs") && !hasBadge("orbs")) badgesArr.push({ id: "orbs", icon: "83d8a1eb09a8d64e59233eec5d4d5c2d", description: getLocalizedBadgeLabel("Orbes — Apprentice") });
             if (customIds.includes("oldname") && !hasBadge("legacy_username")) {
                 const dText = storedData.oldName ? (isFr ? "Connu à l'origine sous le nom de " + storedData.oldName : "Originally known as " + storedData.oldName) : (isFr ? "Connu à l'origine sous le nom de ..." : "Originally known as ...");
                 badgesArr.push({ id: "legacy_username", icon: "6de6d34650760ba5551a79732e98ed60", description: dText });
@@ -2765,7 +2829,7 @@ export default definePlugin({
             }
         } catch { }
 
-        // Patch SnowflakeUtils.extractTimestamp to fake creation date
+        // Patch SnowflakeUtils.extractTimestamp pour faker la date de création
         try {
             if (SnowflakeUtils?.extractTimestamp && !this._origExtractTimestamp) {
                 this._origExtractTimestamp = SnowflakeUtils.extractTimestamp;
@@ -2804,7 +2868,7 @@ export default definePlugin({
             }
         });
 
-        // Patch getAvatarDecorationURL to inject our decoration only on our user
+        // Patch getAvatarDecorationURL pour injecter notre déco uniquement sur notre user
         try {
             const decoMod = (Vencord as any).Webpack?.findByProps?.("getAvatarDecorationURL");
             if (decoMod?.getAvatarDecorationURL) {
@@ -2873,7 +2937,8 @@ export default definePlugin({
 
     userProfileBadges: [
         {
-            getBadges() {
+            getBadges({ userId }: { userId: string; }) {
+                // Badges are already directly attached to profile.badges in getUserProfile / useUserProfile
                 return [];
             }
         } as ProfileBadge
@@ -2902,7 +2967,7 @@ export default definePlugin({
                 delete (GuildMemberStore as any)._cp_orig_getMember;
             }
         } catch { }
-        // Clean up avatarDecoration patch
+        // Nettoyer le patch avatarDecoration
         try {
             const myUser = UserStore.getCurrentUser() as any;
             if (myUser) {

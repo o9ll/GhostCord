@@ -387,10 +387,11 @@ const GifConvertorChatBarButton: ChatBarButtonFactory = ({ isMainChat }) => {
 
 export default definePlugin({
     name: "GifConvertor",
-    description: "Converts an image or video to GIF and sends it in the current channel.",
-    authors: [{ name: "Ghostcord", id: 0n }],
-    dependencies: ["ChatInputButtonAPI"],
     enabledByDefault: true,
+    description: "Converts an image or video to GIF and sends it in the current channel.",
+    authors: [{ name: "Ghostcord",
+     id: 0n }],
+    dependencies: ["ChatInputButtonAPI"],
 
     chatBarButton: {
         icon: GifIcon,

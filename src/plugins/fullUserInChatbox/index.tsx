@@ -25,7 +25,6 @@ export default definePlugin({
     description: "Makes the user mention in the chatbox have more functionalities, like left/right clicking",
     tags: ["Shortcuts", "Utility"],
     authors: [Devs.sadan],
-    enabledByDefault: true,
 
     patches: [
         {

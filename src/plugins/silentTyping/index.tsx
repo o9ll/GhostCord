@@ -300,7 +300,6 @@ export default definePlugin({
     dependencies: ["CommandsAPI", "ChatInputButtonAPI"],
     tags: ["Chat", "Privacy"],
     isModified: true,
-    enabledByDefault: true,
     settings,
 
     shouldHideChatBarTypingIndicators,
@@ -358,9 +357,12 @@ export default definePlugin({
                     required: false,
                     type: ApplicationCommandOptionType.STRING,
                     choices: [
-                        { name: "Global", label: "Global", value: "global" },
-                        { name: "Channel", label: "Channel", value: "channel" },
-                        { name: "Guild", label: "Guild", value: "guild" },
+                        { name: "Global",
+     label: "Global", value: "global" },
+                        { name: "Channel",
+     label: "Channel", value: "channel" },
+                        { name: "Guild",
+     label: "Guild", value: "guild" },
                     ]
                 },
                 {

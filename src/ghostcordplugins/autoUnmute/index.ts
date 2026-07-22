@@ -46,7 +46,8 @@ export default definePlugin({
     name: "AutoUnmute",
     enabledByDefault: true,
     description: "Automatically unmutes and undeafens when you are server muted/deafened, if you have permissions",
-    authors: [{ name: "Bash", id: 1327483363518582784n }],
+    authors: [{ name: "Bash",
+     id: 1327483363518582784n }],
 
     flux: {
         VOICE_STATE_UPDATES({ voiceStates }: { voiceStates: VoiceState[]; }) {

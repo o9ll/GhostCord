@@ -34,7 +34,6 @@ export default definePlugin({
     authors: [Devs.Joona],
     description: "Shows unread message count badges on channels in the channel list",
     tags: ["Appearance", "Customisation", "Servers"],
-    enabledByDefault: true,
     settings,
 
     patches: [

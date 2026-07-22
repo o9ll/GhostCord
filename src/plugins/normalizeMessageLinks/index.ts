@@ -12,7 +12,6 @@ export default definePlugin({
     description: "Strip canary/ptb from message links",
     tags: ["Chat"],
     authors: [Devs.bb010g],
-    enabledByDefault: true,
     patches: [
         {
             find: "#{intl::COPY_MESSAGE_LINK}",

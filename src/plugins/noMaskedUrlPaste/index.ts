@@ -12,7 +12,6 @@ export default definePlugin({
     authors: [Devs.CatNoir],
     description: "Pasting a link while having text selected will not paste as masked URL",
     tags: ["Chat", "Utility"],
-    enabledByDefault: true,
     patches: [
         {
             find: ".selection,preventEmojiSurrogates:",

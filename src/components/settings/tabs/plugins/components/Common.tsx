@@ -28,7 +28,8 @@ export enum SearchStatus {
     NEW,
     USER_PLUGINS,
     API_PLUGINS,
-    TUTORIAL
+    TUTORIAL,
+    LIKED_PLUGINS
 }
 
 interface SettingBaseProps<T> {

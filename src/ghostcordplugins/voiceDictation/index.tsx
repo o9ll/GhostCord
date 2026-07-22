@@ -357,7 +357,8 @@ export default definePlugin({
     name: "VoiceDictation",
     enabledByDefault: true,
     description: "Real-time voice dictation via Groq Whisper (free). API key shared with GhostcordAI.",
-    authors: [{ name: "User", id: 0n }],
+    authors: [{ name: "User",
+     id: 0n }],
     dependencies: ["ChatInputButtonAPI"],
     settings,
     chatBarButton: {

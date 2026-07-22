@@ -123,7 +123,6 @@ export default definePlugin({
     description: "Adds context menu options to jump to the start or bottom of a channel/DM.",
     tags: ["Chat", "Utility"],
     authors: [Devs.Samwich, Devs.thororen],
-    enabledByDefault: true,
     contextMenus: {
         "channel-context": ChannelMenuPatch,
         "gdm-context": ChannelMenuPatch,

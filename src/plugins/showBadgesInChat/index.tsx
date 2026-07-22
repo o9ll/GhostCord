@@ -144,7 +144,6 @@ export default definePlugin({
     description: "Shows the message author's badges beside their name in chat.",
     dependencies: ["MessageDecorationsAPI"],
     tags: ["Appearance", "Chat"],
-    enabledByDefault: true,
     settings,
     renderMessageDecoration(props) {
         return props.message?.author ? <ChatBadges author={props.message.author} /> : null;

@@ -72,7 +72,6 @@ const settings = definePluginSettings({
 
 export default definePlugin({
     name: "AnonymiseFileNames",
-    enabledByDefault: false,
     authors: [Devs.fawn],
     description: "Anonymizes file names before sending. Choose between random, fixed, or timestamped names.",
     isModified: true,

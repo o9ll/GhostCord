@@ -58,7 +58,6 @@ export default definePlugin({
     description: "Disable codecs for streaming of your choice",
     tags: ["Utility", "Voice"],
     authors: [EquicordDevs.davidkra230],
-    enabledByDefault: true,
     settings,
 
     patches: [

@@ -34,11 +34,58 @@ jobs:
       - name: Build Equicord renderer (standalone)
         run: pnpm buildStandalone
 
+      - name: Download Discord for build
+        shell: pwsh
+        run: |
+          $discordBase = "$env:LOCALAPPDATA\Discord"
+          New-Item -ItemType Directory -Path $discordBase -Force | Out-Null
+
+          # Fetch latest Discord version from update API
+          $apiUrl = "https://discord.com/api/updates/distributions/app/installers/latest?channel=stable&platform=win32&arch=x64"
+          try {
+            $info = Invoke-RestMethod -Uri $apiUrl -ErrorAction Stop
+            $version = $info.version
+            Write-Host "Latest Discord version: $version"
+          } catch {
+            # Fallback: parse version from redirect URL
+            $req = [System.Net.WebRequest]::Create("https://discord.com/api/download?platform=win&format=exe")
+            $req.AllowAutoRedirect = $false
+            $resp = $req.GetResponse()
+            $loc = $resp.GetResponseHeader("Location")
+            $resp.Close()
+            $version = if ($loc -match '/app/win/([^/]+)/') { $matches[1] } else { throw "Could not determine Discord version" }
+            Write-Host "Discord version (fallback): $version"
+          }
+
+          $nupkgUrl = "https://dl.discordapp.net/apps/win/$version/Discord-$version-full.nupkg"
+          $nupkgPath = "$env:TEMP\discord-$version.nupkg"
+          $extractDir = "$env:TEMP\discord-extracted-$version"
+
+          Write-Host "Downloading $nupkgUrl ..."
+          Invoke-WebRequest -Uri $nupkgUrl -OutFile $nupkgPath -UserAgent "Ghostcord/CI"
+
+          Remove-Item -Path $extractDir -Recurse -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Path $extractDir -Force | Out-Null
+          & "C:\Program Files\7-Zip\7z.exe" x $nupkgPath -o"$extractDir" -y | Out-Null
+
+          $appDir = Join-Path $discordBase "app-$version"
+          New-Item -ItemType Directory -Path $appDir -Force | Out-Null
+          Copy-Item "$extractDir\lib\net45\*" $appDir -Recurse -Force
+
+          # Verify Discord.exe exists
+          if (-not (Test-Path "$appDir\Discord.exe")) {
+            Write-Host "WARNING: Discord.exe not found at expected path — listing extracted files:"
+            Get-ChildItem -Path $extractDir -Recurse -Depth 3 | Select-Object FullName | Format-Table
+            throw "Discord.exe not found after extraction"
+          }
+
+          Write-Host "Discord $version ready at $appDir"
+
       - name: Build & Package Electron
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          node electron-builder.config.cjs || true
+          node electron-builder.config.cjs
           npx electron-builder --config electron-builder.config.cjs --win --publish always
 
       - name: Package ghostcord-dist.zip
