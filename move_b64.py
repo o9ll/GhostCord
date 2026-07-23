@@ -6,27 +6,27 @@ with open("src/components/settings/tabs/LanguageTab.tsx", "r", encoding="utf-8")
 
 # Extract the base64 constants
 gb_b64 = re.search(r'const GB_B64 = "(.*?)";', lang_tab_content).group(0)
+sa_b64 = re.search(r'const SA_B64 = "(.*?)";', lang_tab_content).group(0)
 fr_b64 = re.search(r'const FR_B64 = "(.*?)";', lang_tab_content).group(0)
 es_b64 = re.search(r'const ES_B64 = "(.*?)";', lang_tab_content).group(0)
 ru_b64 = re.search(r'const RU_B64 = "(.*?)";', lang_tab_content).group(0)
 cn_b64 = re.search(r'const CN_B64 = "(.*?)";', lang_tab_content).group(0)
-sa_b64 = re.search(r'const SA_B64 = "(.*?)";', lang_tab_content).group(0)
 
 flags = f"""
 export {gb_b64}
+export {sa_b64}
 export {fr_b64}
 export {es_b64}
 export {ru_b64}
 export {cn_b64}
-export {sa_b64}
 
 export const LANGUAGE_FLAGS: Record<Language, string> = {{
     en: GB_B64,
+    ar: SA_B64,
     fr: FR_B64,
     es: ES_B64,
     ru: RU_B64,
     zh: CN_B64,
-    ar: SA_B64,
 }};
 """
 
@@ -45,11 +45,11 @@ with open("src/api/i18n.ts", "w", encoding="utf-8") as f:
 
 # Update LanguageTab.tsx
 lang_tab_content = re.sub(r'const GB_B64 = ".*?";\n', '', lang_tab_content)
+lang_tab_content = re.sub(r'const SA_B64 = ".*?";\n', '', lang_tab_content)
 lang_tab_content = re.sub(r'const FR_B64 = ".*?";\n', '', lang_tab_content)
 lang_tab_content = re.sub(r'const ES_B64 = ".*?";\n', '', lang_tab_content)
 lang_tab_content = re.sub(r'const RU_B64 = ".*?";\n', '', lang_tab_content)
 lang_tab_content = re.sub(r'const CN_B64 = ".*?";\n', '', lang_tab_content)
-lang_tab_content = re.sub(r'const SA_B64 = ".*?";\n', '', lang_tab_content)
 
 lang_tab_content = re.sub(
     r'const FLAG_ICONS: Record<Language, string> = \{[^\}]+\};',
